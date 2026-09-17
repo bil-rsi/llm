@@ -1,0 +1,18 @@
+{"id":"port-busy","query":"server fails to start because the port is already in use","needle":"stop.ps1"}
+{"id":"alloc-fail","query":"failed to allocate buffer when loading the model","needle":"switch the KV cache to `q8_0`"}
+{"id":"device-lost","query":"vk::DeviceLostError during load","needle":"-Ub 256"}
+{"id":"hash-check","query":"how do I verify the model file hash","needle":"expected-sha256.txt"}
+{"id":"slow-gen","query":"why is generation slow, tokens per second","needle":"memory bandwidth"}
+{"id":"paging","query":"shared memory above 19 GB paging","needle":"Closing the browser"}
+{"id":"think-budget","query":"what does the reasoning budget cap","needle":"forced to answer"}
+{"id":"schema-think","query":"is thinking disabled when using a JSON schema","needle":"thinking is disabled automatically"}
+{"id":"schema-cmd","query":"example command to extract entities with a schema","needle":"extract-entities.json -NoThink"}
+{"id":"lan-expose","query":"expose the server on the LAN network","needle":"-Host 0.0.0.0"}
+{"id":"log-rotate","query":"are server logs rotated","needle":"never rotated"}
+{"id":"q5-rejected","query":"why was Q5_K_M rejected","needle":"too little room for the KV cache"}
+{"id":"quant-size","query":"file size of the Q8_0 quant","needle":"30.2 GB"}
+{"id":"draft-removed","query":"speculative decoding draft model acceptance rate","needle":"below 40 percent"}
+{"id":"deep-profile","query":"which profile is for offline batch jobs","needle":"Offline batch jobs only"}
+{"id":"kv-sweep","query":"benchmark the KV cache types","needle":"-Ctk f16,q8_0,q4_0"}
+{"id":"eval-compare","query":"compare two eval runs","needle":"-Compare logs\\eval\\a.json"}
+{"id":"web-ui","query":"web UI address","needle":"http://127.0.0.1:8080"}
