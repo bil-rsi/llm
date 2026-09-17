@@ -10,3 +10,5 @@
 - [x] Checkpoint B: check.ps1 -Stage task green (26 tests), rag.psm1 diff ~120 lines
 - [x] /code-simplify: no behaviour-preserving simplification worth a change
 - [x] /review: 1 Critical fixed (text dropped from code files / heading-only sections, chunker v3); facts-local eval 100% on v1, v2, v3
+- [x] /ship #1: NO-GO. Fixed heading-run size bound, fence closing, table overlap, Size 0 hang, 20-50x slowdown, check.ps1 secret-scan gaps; +19 tests (45 total), chunker v4
+- [ ] /ship #2

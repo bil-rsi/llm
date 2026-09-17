@@ -73,3 +73,21 @@ Match `rag.psm1`: dense one-line statements, `System.Collections.ArrayList`, no 
 
 - Headings are hard chunk boundaries (approved 2026-09-17).
 - Found at /review: headings and fences are recognised only in `.md`/`.markdown`. Other indexed files are plain paragraphs, cut at line ends (`.txt` at sentence ends), because `#` comments in `.ps1`/`.py`/`.yaml` were being taken as headings and dropped. A heading with no body (e.g. `# Parent` directly before `## Child`) is kept as leading text of the next section, whose `heading` is the innermost one. Chunker version 3.
+- After /ship NO-GO (user chose to fix all findings), chunker version 4:
+  - Headings with no body stay within `Size + Overlap` and are flushed as their own chunk when needed.
+  - Heading labels are capped at 120 chars.
+  - A fence closes only on the same marker char, at least as long, with nothing after it.
+  - Overlap starts on a line when the overlap window holds table or fence lines.
+  - A buffer no longer than the overlap merges with the next piece instead of being duplicated.
+  - `Size` is clamped to at least 1.
+  - Blocks are plain arrays; per-block objects and pipelines caused the 20–50× slowdown.
+
+  Measured 2026-09-17, min of 3 runs, `master` → v3 → v4:
+
+  | Input | `master` | v3 | v4 |
+  |---|---|---|---|
+  | 400 KB of 1-char paragraphs | 1.5 s | ~56 s | 4.6 s |
+  | 1 MB prose | 49 ms | 318 ms | 134 ms |
+  | Fixture ×20 | 20 ms | 129 ms | 37 ms |
+
+  The remaining ≤3× overhead appears only on pathological inputs; this is accepted.

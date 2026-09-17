@@ -8,100 +8,112 @@ $Stop = @('the','a','an','and','or','of','to','in','on','for','is','are','was','
           'what','how','do','does','i','you','my','your','we','can','yang','dan','di','ke','dari','ini','itu','untuk','dengan','adalah','apa','bagaimana')
 $StopSet = New-Object 'System.Collections.Generic.HashSet[string]' -ArgumentList (,[string[]]$Stop)
 $Exts = @('.md', '.txt', '.ps1', '.py', '.js', '.ts', '.json', '.yaml', '.yml', '.csv', '.html', '.log')
-$ChunkerVersion = 3           # bump whenever Split-Doc output changes: forces a full re-chunk of every file
+$ChunkerVersion = 4           # bump whenever Split-Doc output changes: forces a full re-chunk of every file
 $script:Index = $null
 
 function Get-Tokens([string]$Text) {
     foreach ($t in [regex]::Split($Text.ToLowerInvariant(), '[^\p{L}\p{N}_]+')) { if ($t.Length -gt 1 -and -not $StopSet.Contains($t)) { $t } }
 }
 
-# Blocks = headings, blank-line-separated paragraphs and fenced code blocks, in document order.
+# Blocks = headings, blank-line-separated paragraphs and fenced code blocks, in document order, as
+# @(kind, text, headingLabel) arrays (plain arrays: per-block objects and function calls dominated run time).
 # Kind 'lines' (fences, tables, code files) is only ever cut at line ends; 'prose' at sentence or word ends.
 # Headings and fences are only recognised in markdown; other files are plain paragraphs of $PlainKind.
 function Get-DocBlock([string]$Text, [bool]$Markdown = $true, [string]$PlainKind = 'prose') {
-    $para = New-Object System.Collections.ArrayList; $inFence = $false
-    $paraKind = if ($Markdown) { '' } else { $PlainKind }
+    $blocks = New-Object System.Collections.ArrayList
+    $para = New-Object System.Collections.ArrayList
+    $fence = ''; $closeFence = ''
     foreach ($line in ($Text -split '\r?\n') + '') {          # trailing '' flushes the last paragraph
-        $isFence = $Markdown -and $line -match '^\s*(```|~~~)'
-        if ($inFence) {
+        $t = $line.Trim()
+        if ($fence) {                                          # CommonMark: close on the same char, at least as long, nothing after
             [void]$para.Add($line)
-            if ($isFence) { ConvertTo-DocBlock $para 'lines'; $para.Clear(); $inFence = $false }
+            if ($t.StartsWith($fence) -and $t -match $closeFence) { [void]$blocks.Add(@('lines', ($para -join "`n").Trim(), '')); $para.Clear(); $fence = '' }
             continue
         }
-        $isHeading = $Markdown -and $line -match '^#{1,6}\s+\S'
-        if (($isFence -or $isHeading -or -not $line.Trim()) -and $para.Count) { ConvertTo-DocBlock $para $paraKind; $para.Clear() }
-        if ($isFence) { [void]$para.Add($line); $inFence = $true }
-        elseif ($isHeading) { [pscustomobject]@{ Heading = ($line -replace '^#{1,6}\s+', '').Trim(); Kind = 'heading'; Text = $line.Trim() } }
-        elseif ($line.Trim()) { [void]$para.Add($line) }
+        $isOpen = $Markdown -and ($t.StartsWith('```') -or $t.StartsWith('~~~')) -and $t -match '^(`{3,}|~{3,})'
+        $isHeading = -not $isOpen -and $Markdown -and $line.StartsWith('#') -and $line -match '^#{1,6}\s+\S'
+        if ($para.Count -and ($isOpen -or $isHeading -or -not $t)) {
+            $body = ($para -join "`n").Trim()
+            $kind = if (-not $Markdown) { $PlainKind } elseif ($body -match '(?m)^(?!\s*\|)') { 'prose' } else { 'lines' }
+            [void]$blocks.Add(@($kind, $body, '')); $para.Clear()
+        }
+        if ($isOpen) { $fence = $Matches[1]; $closeFence = '^' + [regex]::Escape($fence[0]) + '{' + $fence.Length + ',}$'; [void]$para.Add($line) }
+        elseif ($isHeading) {
+            $label = ($t -replace '^#{1,6}\s+', '') -replace '\s+#+$', ''
+            [void]$blocks.Add(@('heading', $t, $label.Substring(0, [math]::Min(120, $label.Length))))
+        }
+        elseif ($t) { [void]$para.Add($line) }
     }
-    if ($para.Count) { ConvertTo-DocBlock $para 'lines' }            # unclosed fence runs to the end
-}
-
-# A paragraph whose every line is a table row counts as 'lines'.
-function ConvertTo-DocBlock($Lines, [string]$Kind = '') {
-    if (-not $Kind) { $Kind = if (@($Lines | Where-Object { -not $_.TrimStart().StartsWith('|') }).Count) { 'prose' } else { 'lines' } }
-    [pscustomobject]@{ Heading = $null; Kind = $Kind; Text = ($Lines -join "`n").Trim() }
+    if ($para.Count) { [void]$blocks.Add(@('lines', ($para -join "`n").Trim(), '')) }    # unclosed fence runs to the end
+    , $blocks
 }
 
 # Cuts text longer than $Size into pieces of at most $Size chars. 'lines' blocks: at the last line end.
 # 'prose': at the last sentence end in the second half of the window, else the last whitespace.
 # A single token longer than $Size is cut at exactly $Size.
 function Split-LongText([string]$Text, [int]$Size, [string]$Kind = 'prose') {
-    $rest = $Text
-    while ($rest.Length -gt $Size) {
-        $window = $rest.Substring(0, $Size + 1)
-        $cut = $Size
-        $ends = [regex]::Matches($window, '[.!?](?=\s)')
-        $nl = $window.LastIndexOf("`n"); $ws = $window.LastIndexOfAny([char[]]" `t`n")
-        if ($Kind -eq 'lines' -and $nl -gt 0) { $cut = $nl }
-        elseif ($Kind -ne 'lines' -and $ends.Count -and $ends[$ends.Count - 1].Index -ge $Size / 2) { $cut = $ends[$ends.Count - 1].Index + 1 }
-        elseif ($ws -gt 0) { $cut = $ws }
-        $rest.Substring(0, $cut).TrimEnd()
-        $rest = if ($Kind -eq 'lines') { $rest.Substring($cut).TrimStart("`r`n".ToCharArray()) } else { $rest.Substring($cut).TrimStart() }   # keep code indentation
+    $pos = 0; $n = $Text.Length
+    $newlines = [char[]]"`r`n"; $spaces = [char[]]" `t`r`n"
+    while ($n - $pos -gt $Size) {
+        $window = $Text.Substring($pos, $Size + 1)
+        $cut = -1; $skip = $spaces
+        if ($Kind -eq 'lines') { $nl = $window.LastIndexOf("`n"); if ($nl -gt 0) { $cut = $nl; $skip = $newlines } }   # keep code indentation
+        else { $ends = [regex]::Matches($window, '[.!?](?=\s)'); if ($ends.Count -and $ends[$ends.Count - 1].Index -ge $Size / 2) { $cut = $ends[$ends.Count - 1].Index + 1 } }
+        if ($cut -lt 0) { $cut = $window.LastIndexOfAny([char[]]" `t`n"); if ($cut -le 0) { $cut = $Size } }
+        $piece = $Text.Substring($pos, $cut).TrimEnd(); if ($piece) { $piece }
+        $pos += $cut
+        while ($pos -lt $n -and $skip -contains $Text[$pos]) { $pos++ }
     }
-    if ($rest) { $rest }
+    if ($pos -lt $n) { $Text.Substring($pos) }
 }
 
 # Tail of a finished chunk (at most $Overlap - 2 chars) repeated at the start of the next chunk in the same
-# section. Starts at the first line start ('lines') or sentence start ('prose') inside the window, else the
-# first word start, else there is no overlap.
+# section. Starts at the first line start when the window holds table or fence lines (or $Kind is 'lines'),
+# otherwise at the first sentence start; else the first word start; else there is no overlap.
 function Get-OverlapTail([string]$Text, [int]$Overlap, [string]$Kind = 'prose') {
     $max = $Overlap - 2
     if ($max -le 0) { return '' }
     if ($Text.Length -le $max) { return $Text }
     $window = $Text.Substring($Text.Length - $max)
-    $patterns = if ($Kind -eq 'lines') { @('\n+(?=[^\n])') } else { @('(?<=[.!?])\s+(?=\S)', '\s+(?=\S)') }
+    $patterns = if ($Kind -eq 'lines' -or $window -match '(?m)^\s*(\||```|~~~)') { @('\n+(?=[^\n])') } else { @('(?<=[.!?])\s+(?=\S)', '\s+(?=\S)') }
     foreach ($pattern in $patterns) {
         $m = [regex]::Match($window, $pattern); if ($m.Success) { return $window.Substring($m.Index + $m.Length) }
     }
     ''
 }
 
-# Chunks never cross a heading; within a section, paragraphs are packed up to $Size and each chunk
-# after the first starts with an overlap tail of the previous one (so text <= $Size + $Overlap).
+# Chunks never cross a heading and are at most $Size + $Overlap chars (except a single token longer than
+# $Size). Within a section, paragraphs are packed up to $Size and each chunk after the first starts with an
+# overlap tail of the previous one. Headings with no body are kept as leading text of the next section,
+# flushed as their own chunk once they would push it past the bound.
 function Split-Doc([string]$Rel, [string]$Text, [int]$Size = 1200, [int]$Overlap = 200) {
+    $Size = [math]::Max(1, $Size); $Overlap = [math]::Max(0, $Overlap)
     $chunks = New-Object System.Collections.ArrayList
     $heading = ''; $buf = ''; $hasBody = $false; $carry = ''; $lastKind = 'prose'
     $plainKind = if ($Rel -match '\.txt$') { 'prose' } else { 'lines' }
-    foreach ($b in Get-DocBlock $Text ($Rel -match '\.(md|markdown)$') $plainKind) {
-        if ($b.Kind -eq 'heading') {
-            if ($hasBody) { [void]$chunks.Add(@{ heading = $heading; text = $buf }); $buf = '' }
-            $buf = if ($buf) { "$buf`n`n$($b.Text)" } else { $b.Text }    # a heading with no body stays as text of the next section
-            $heading = $b.Heading; $hasBody = $false; $carry = ''
-            continue
+    foreach ($b in (Get-DocBlock $Text ($Rel -match '\.(md|markdown)$') $plainKind)) {
+        $kind = $b[0]; $text = $b[1]; $isHeading = $kind -eq 'heading'
+        if ($isHeading) {
+            if ($hasBody) { [void]$chunks.Add(@($heading, $buf)); $buf = '' }
+            $hasBody = $false; $carry = ''; $kind = 'prose'
         }
-        foreach ($piece in @(if ($b.Text.Length -gt $Size) { Split-LongText $b.Text $Size $b.Kind } else { $b.Text })) {
-            if ($hasBody -and $buf.Length + 2 + $piece.Length -gt $Size) {
-                [void]$chunks.Add(@{ heading = $heading; text = $buf }); $carry = Get-OverlapTail $buf $Overlap $lastKind; $buf = ''
+        $pieces = if ($text.Length -gt $Size) { Split-LongText $text $Size $kind } else { $text }
+        foreach ($piece in $pieces) {
+            $limit = if ($hasBody -and $buf.Length -gt $Overlap - 2) { $Size } else { $Size + $Overlap }   # tiny or heading-only buffers may merge up to the bound
+            if ($buf -and $buf.Length + 2 + $piece.Length -gt $limit) {
+                [void]$chunks.Add(@($heading, $buf))
+                $carry = if ($hasBody) { Get-OverlapTail $buf $Overlap $lastKind } else { '' }
+                $buf = ''
             }
-            $lastKind = $b.Kind
             $prefix = if ($buf) { $buf } else { $carry }
-            $buf = if ($prefix) { "$prefix`n`n$piece" } else { $piece }; $hasBody = $true
+            $buf = if ($prefix) { "$prefix`n`n$piece" } else { $piece }
+            if (-not $isHeading) { $hasBody = $true; $lastKind = $kind }
         }
+        if ($isHeading) { $heading = $b[2] }                   # after flushing, so earlier headings keep their own label
     }
-    if ($buf) { [void]$chunks.Add(@{ heading = $heading; text = $buf }) }
+    if ($buf) { [void]$chunks.Add(@($heading, $buf)) }
     $i = 0
-    foreach ($c in $chunks) { [pscustomobject]@{ id = "$Rel#$i"; file = $Rel; heading = $c.heading; text = $c.text }; $i++ }
+    foreach ($c in $chunks) { [pscustomobject]@{ id = "$Rel#$i"; file = $Rel; heading = $c[0]; text = $c[1] }; $i++ }
 }
 
 function Update-RagIndex {
