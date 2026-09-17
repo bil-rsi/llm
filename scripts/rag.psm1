@@ -15,23 +15,48 @@ function Get-Tokens([string]$Text) {
     foreach ($t in [regex]::Split($Text.ToLowerInvariant(), '[^\p{L}\p{N}_]+')) { if ($t.Length -gt 1 -and -not $StopSet.Contains($t)) { $t } }
 }
 
-function Split-Doc([string]$Rel, [string]$Text, [int]$Size = 1200, [int]$Overlap = 200) {
-    $heading = ''; $buf = ''; $bufHeading = ''
-    $chunks = New-Object System.Collections.ArrayList
-    foreach ($para in [regex]::Split($Text, '(\r?\n){2,}')) {
-        $para = $para.Trim(); if (-not $para) { continue }
-        if ($para -match '^(#{1,6})\s+(.+)$') { $heading = $Matches[2].Trim() }
-        while ($para.Length -gt $Size) {          # hard-split very long paragraphs
-            [void]$chunks.Add(@{ heading = $heading; text = $para.Substring(0, $Size) }); $para = $para.Substring($Size - $Overlap)
-        }
-        if ($buf.Length + $para.Length + 2 -gt $Size -and $buf) {
-            [void]$chunks.Add(@{ heading = $bufHeading; text = $buf })
-            $buf = $buf.Substring([math]::Max(0, $buf.Length - $Overlap)); $bufHeading = $heading
-        }
-        if (-not $buf) { $bufHeading = $heading }
-        $buf = if ($buf) { "$buf`n`n$para" } else { $para }
+# Blocks = heading lines and blank-line-separated paragraphs, in document order.
+function Get-DocBlock([string]$Text) {
+    $para = New-Object System.Collections.ArrayList
+    foreach ($line in ($Text -split '\r?\n') + '') {
+        $isHeading = $line -match '^#{1,6}\s+\S'
+        if (($isHeading -or -not $line.Trim()) -and $para.Count) { [pscustomobject]@{ Heading = $null; Text = ($para -join "`n").Trim() }; $para.Clear() }
+        if ($isHeading) { [pscustomobject]@{ Heading = ($line -replace '^#{1,6}\s+', '').Trim(); Text = $line.Trim() } }
+        elseif ($line.Trim()) { [void]$para.Add($line) }
     }
-    if ($buf) { [void]$chunks.Add(@{ heading = $bufHeading; text = $buf }) }
+}
+
+# Cuts text longer than $Size into pieces of at most $Size chars.
+function Split-LongText([string]$Text, [int]$Size) {
+    for ($i = 0; $i -lt $Text.Length; $i += $Size) { $Text.Substring($i, [math]::Min($Size, $Text.Length - $i)) }
+}
+
+# Tail of a finished chunk that is repeated at the start of the next chunk in the same section.
+function Get-OverlapTail([string]$Text, [int]$Overlap) {
+    if ($Overlap -le 2) { return '' }
+    $Text.Substring([math]::Max(0, $Text.Length - ($Overlap - 2)))
+}
+
+# Chunks never cross a heading; within a section, paragraphs are packed up to $Size and each chunk
+# after the first starts with an overlap tail of the previous one (so text <= $Size + $Overlap).
+function Split-Doc([string]$Rel, [string]$Text, [int]$Size = 1200, [int]$Overlap = 200) {
+    $chunks = New-Object System.Collections.ArrayList
+    $heading = ''; $buf = ''; $hasBody = $false; $carry = ''
+    foreach ($b in Get-DocBlock $Text) {
+        if ($null -ne $b.Heading) {
+            if ($hasBody) { [void]$chunks.Add(@{ heading = $heading; text = $buf }) }
+            $heading = $b.Heading; $buf = $b.Text; $hasBody = $false; $carry = ''
+            continue
+        }
+        foreach ($piece in @(if ($b.Text.Length -gt $Size) { Split-LongText $b.Text $Size } else { $b.Text })) {
+            if ($hasBody -and $buf.Length + 2 + $piece.Length -gt $Size) {
+                [void]$chunks.Add(@{ heading = $heading; text = $buf }); $carry = Get-OverlapTail $buf $Overlap; $buf = ''
+            }
+            $prefix = if ($buf) { $buf } else { $carry }
+            $buf = if ($prefix) { "$prefix`n`n$piece" } else { $piece }; $hasBody = $true
+        }
+    }
+    if ($hasBody) { [void]$chunks.Add(@{ heading = $heading; text = $buf }) }
     $i = 0
     foreach ($c in $chunks) { [pscustomobject]@{ id = "$Rel#$i"; file = $Rel; heading = $c.heading; text = $c.text }; $i++ }
 }

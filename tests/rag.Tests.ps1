@@ -7,6 +7,47 @@ function Use-TempRagRoot([string]$Root) { New-Item -ItemType Directory -Force "$
 function Read-Index([string]$Root) { Get-Content "$Root\index.json" -Raw | ConvertFrom-Json }
 function Write-Index([string]$Root, $Index) { $Index | ConvertTo-Json -Depth 5 -Compress | Set-Content "$Root\index.json" -Encoding UTF8 }
 
+Describe 'Split-Doc document order and headings' {
+    It 'emits buffered text before a following long paragraph (B1)' {
+        $long = (1..60 | ForEach-Object { "Sentence number $_ is here." }) -join ' '
+        $chunks = Split-TestDoc "# A`n`nintro paragraph BEFORE`n`n$long"
+        $chunks[0].text | Should Match 'intro paragraph BEFORE'
+    }
+
+    It 'keeps every paragraph in source order' {
+        $rand = New-Object Random 7
+        $text = (1..25 | ForEach-Object { "mark$('{0:D2}' -f $_) " + ('filler words go here ' * $rand.Next(1, 90)) }) -join "`n`n"
+        $chunks = Split-TestDoc $text
+        $first = 1..25 | ForEach-Object { $m = "mark$('{0:D2}' -f $_)"; for ($i = 0; $i -lt $chunks.Count; $i++) { if ($chunks[$i].text.Contains($m)) { $i; break } } }
+        @($first).Count | Should Be 25
+        for ($k = 1; $k -lt 25; $k++) { $first[$k] | Should Not BeLessThan $first[$k - 1] }
+    }
+
+    It 'labels each chunk with the heading its first line falls under (B3)' {
+        $chunks = Split-TestDoc ("# Alpha`n`n" + ('alpha text ' * 100).Trim() + "`n`n# Beta`n`n" + ('beta text ' * 100).Trim())
+        foreach ($c in $chunks) {
+            if ($c.heading -eq 'Beta') { $c.text | Should Not Match 'alpha' } else { $c.heading | Should Be 'Alpha'; $c.text | Should Not Match 'beta' }
+        }
+        @($chunks | Where-Object heading -eq 'Beta').Count | Should BeGreaterThan 0
+    }
+
+    It 'starts a new chunk at every heading, even for short sections' {
+        $chunks = Split-TestDoc "intro without heading`n`n# One`n`nshort one`n`n## Two`n`nshort two"
+        ($chunks | ForEach-Object { $_.heading }) -join '|' | Should Be '|One|Two'
+        $chunks[1].text | Should Be "# One`n`nshort one"
+    }
+
+    It 'returns no chunks for empty or whitespace-only text' {
+        (Split-TestDoc '').Count | Should Be 0
+        (Split-TestDoc "  `n`n  `n").Count | Should Be 0
+    }
+
+    It 'assigns sequential ids' {
+        $chunks = Split-TestDoc "# One`n`na`n`n# Two`n`nb"
+        ($chunks | ForEach-Object { $_.id }) -join ',' | Should Be 'doc.md#0,doc.md#1'
+    }
+}
+
 Describe 'Update-RagIndex chunker version' {
     $root = "$TestDrive\rag"
     Use-TempRagRoot $root
