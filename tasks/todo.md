@@ -6,5 +6,5 @@
 - [x] Task 3: Boundary-aware overlap and hard splits (B2, B5)
 - [x] Checkpoint A: fixture chunk dump + retrieval eval vs baseline (retrieval 1.0; tables still cut mid-row -> Task 4)
 - [x] Task 4: Code fences kept whole
-- [ ] Task 5: README + end-to-end verification
+- [x] Task 5: README + end-to-end verification (facts-local 100% -> 100%; live index rebuilt once, then 0 changed)
 - [ ] Checkpoint B: check.ps1 -Stage task green, diff < ~300 lines

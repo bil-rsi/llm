@@ -22,7 +22,9 @@ Ub/Spec values are provisional until confirmed by the bench sweeps.
 | One question | `ask.ps1 "question" [-Think\|-NoThink] [-Rag on\|auto] [-Schema C:\llm\schemas\classify.json] [-ShowThinking]` |
 | Terminal chat | `chat.ps1 [-Rag auto]` (commands `/think on\|off\|auto`, `/rag on\|off\|auto`, `/schema <file>\|off`, `/show`); `-Direct -Model 35b` without server |
 | Override the think router | Start the prompt with `/think` or `/nothink` |
-| Index documents for RAG | Put .md/.txt/code in `C:\llm\rag\docs`, run `rag-index.ps1`; inspect with `rag-index.ps1 -Query "..."` |
+| Index documents for RAG | Put .md/.txt/code in `C:\llm\rag\docs`, run `rag-index.ps1`; inspect with `rag-index.ps1 -Query "..."`. Chunks follow headings and never split code fences or table rows; a chunker change (`$ChunkerVersion` in `rag.psm1`) re-chunks every file on the next run |
+| Retrieval eval (no server) | `rag-eval.ps1 [-Baseline tests\fixtures\rag\baseline.json]` (fixture corpus in `tests\fixtures\rag`, results in `logs\rag-eval\`) |
+| Checks before a change is done | `check.ps1 -Stage fast\|task\|full` (rules in `CONSTRAINTS.md`; unit tests in `tests\`, run with `Invoke-Pester C:\llm\tests`) |
 | Resource usage | `status.ps1` |
 | Benchmark sweep | `bench.ps1 -Model 35b -Ub 256,512,1024,2048 -Pp 512,2048 -Tg 32 -Tag ub` (results in `logs\bench\`) |
 | KV cache sweep | `bench.ps1 -Model 27b -Ctk f16,q8_0,q4_0 -Ctv f16,q8_0,q4_0 -Depth 0,8192 -Tg 32 -Reps 2 -Tag kv` |
