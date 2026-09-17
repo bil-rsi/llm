@@ -1,0 +1,6 @@
+﻿| model                          |       size |     params | backend    | ngl | threads |  fa |            test |                  t/s |
+| ------------------------------ | ---------: | ---------: | ---------- | --: | ------: | --: | --------------: | -------------------: |
+| qwen35moe 35B.A3B Q4_K - Medium |  20.60 GiB |    34.66 B | Vulkan     |  99 |       6 |   1 |           pp512 |         58.78 ± 0.17 |
+| qwen35moe 35B.A3B Q4_K - Medium |  20.60 GiB |    34.66 B | Vulkan     |  99 |       6 |   1 |           tg128 |          5.95 ± 0.03 |
+
+build: aa39d7a3e (11011)

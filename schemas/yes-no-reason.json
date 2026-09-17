@@ -1,0 +1,9 @@
+{
+  "type": "object",
+  "properties": {
+    "answer": { "type": "string", "enum": ["yes", "no"] },
+    "reason": { "type": "string", "maxLength": 300 }
+  },
+  "required": ["answer", "reason"],
+  "additionalProperties": false
+}

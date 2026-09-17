@@ -1,0 +1,10 @@
+﻿| model                          |       size |     params | backend    | threads |  fa |            test |                  t/s |
+| ------------------------------ | ---------: | ---------: | ---------- | ------: | --: | --------------: | -------------------: |
+| qwen35moe 35B.A3B Q4_K - Medium |  20.60 GiB |    34.66 B | CPU        |       4 |   1 |           pp512 |         19.48 ± 0.25 |
+| qwen35moe 35B.A3B Q4_K - Medium |  20.60 GiB |    34.66 B | CPU        |       4 |   1 |           tg128 |          5.48 ± 0.13 |
+| qwen35moe 35B.A3B Q4_K - Medium |  20.60 GiB |    34.66 B | CPU        |       6 |   1 |           pp512 |         23.40 ± 0.05 |
+| qwen35moe 35B.A3B Q4_K - Medium |  20.60 GiB |    34.66 B | CPU        |       6 |   1 |           tg128 |          5.69 ± 0.09 |
+| qwen35moe 35B.A3B Q4_K - Medium |  20.60 GiB |    34.66 B | CPU        |      10 |   1 |           pp512 |         29.80 ± 0.20 |
+| qwen35moe 35B.A3B Q4_K - Medium |  20.60 GiB |    34.66 B | CPU        |      10 |   1 |           tg128 |          5.53 ± 0.15 |
+
+build: aa39d7a3e (11011)

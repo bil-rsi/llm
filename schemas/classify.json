@@ -1,0 +1,10 @@
+{
+  "type": "object",
+  "properties": {
+    "label": { "type": "string", "enum": ["bug", "feature", "question", "other"] },
+    "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+    "reason": { "type": "string", "maxLength": 200 }
+  },
+  "required": ["label", "confidence", "reason"],
+  "additionalProperties": false
+}

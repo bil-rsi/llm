@@ -1,0 +1,173 @@
+﻿{
+    "summary":  [
+                    {
+                        "category":  "facts-local",
+                        "n":  5,
+                        "acc":  80,
+                        "med_ttft_s":  14,
+                        "med_wall_s":  20.5,
+                        "med_tps":  5.62
+                    },
+                    {
+                        "category":  "ALL",
+                        "n":  5,
+                        "acc":  80,
+                        "med_ttft_s":  14,
+                        "med_wall_s":  20.5,
+                        "med_tps":  5.62
+                    }
+                ],
+    "meta":  {
+                 "seed":  42,
+                 "think":  "auto",
+                 "server":  {
+                                "Budget":  512,
+                                "Alias":  "qwen3.6-35b-a3b",
+                                "Model":  "35b",
+                                "Draft":  "",
+                                "Ctx":  16384,
+                                "Profile":  "speed",
+                                "Reasoning":  "auto",
+                                "ThinkThreshold":  4,
+                                "Build":  "C:\\llm\\llama.cpp\\vulkan",
+                                "Spec":  "none",
+                                "Ub":  1024,
+                                "Port":  8080,
+                                "Ctv":  "f16",
+                                "RagK":  2,
+                                "Ctk":  "f16",
+                                "RagTokens":  800
+                            },
+                 "profile":  "speed",
+                 "tag":  "smoke",
+                 "total_wall_s":  110,
+                 "model":  "35b",
+                 "reps":  1,
+                 "set":  "C:\\llm\\eval\\evalset.jsonl"
+             },
+    "results":  [
+                    {
+                        "id":  "rag-status",
+                        "category":  "facts-local",
+                        "rep":  1,
+                        "pass":  true,
+                        "error":  "",
+                        "think":  false,
+                        "think_score":  0,
+                        "should_think":  false,
+                        "json_valid":  false,
+                        "retries":  0,
+                        "prompt_tokens":  822,
+                        "prompt_ms":  15202.512,
+                        "gen_tokens":  57,
+                        "gen_tps":  4.9018324888030325,
+                        "draft_n":  0,
+                        "draft_accepted":  0,
+                        "reasoning_chars":  0,
+                        "wall_ms":  28814,
+                        "sources":  [
+                                        "llm-setup.md#1",
+                                        "llm-setup.md#0"
+                                    ],
+                        "answer":  "Not in my documents\n\nBased on general knowledge of the setup described in the sources, the script `status.ps1` is likely used to show resource usage, which typically includes memory usage, but the provided text does not explicitly confirm that it displays iGPU shared memory usage specifically."
+                    },
+                    {
+                        "id":  "rag-port",
+                        "category":  "facts-local",
+                        "rep":  1,
+                        "pass":  true,
+                        "error":  "",
+                        "think":  false,
+                        "think_score":  0,
+                        "should_think":  false,
+                        "json_valid":  false,
+                        "retries":  0,
+                        "prompt_tokens":  495,
+                        "prompt_ms":  11122.847,
+                        "gen_tokens":  8,
+                        "gen_tps":  5.8550751791653,
+                        "draft_n":  0,
+                        "draft_accepted":  0,
+                        "reasoning_chars":  0,
+                        "wall_ms":  14686,
+                        "sources":  [
+                                        "llm-setup.md#0"
+                                    ],
+                        "answer":  "8080 [1]"
+                    },
+                    {
+                        "id":  "rag-alias",
+                        "category":  "facts-local",
+                        "rep":  1,
+                        "pass":  true,
+                        "error":  "",
+                        "think":  false,
+                        "think_score":  0,
+                        "should_think":  false,
+                        "json_valid":  false,
+                        "retries":  0,
+                        "prompt_tokens":  819,
+                        "prompt_ms":  14248.557,
+                        "gen_tokens":  27,
+                        "gen_tps":  5.564565871832639,
+                        "draft_n":  0,
+                        "draft_accepted":  0,
+                        "reasoning_chars":  0,
+                        "wall_ms":  20523,
+                        "sources":  [
+                                        "llm-setup.md#1",
+                                        "llm-setup.md#0"
+                                    ],
+                        "answer":  "The model id for the MoE model is `qwen3.6-35b-a3b` [1]."
+                    },
+                    {
+                        "id":  "rag-cpu",
+                        "category":  "facts-local",
+                        "rep":  1,
+                        "pass":  true,
+                        "error":  "",
+                        "think":  false,
+                        "think_score":  0,
+                        "should_think":  false,
+                        "json_valid":  false,
+                        "retries":  0,
+                        "prompt_tokens":  816,
+                        "prompt_ms":  13993.513,
+                        "gen_tokens":  22,
+                        "gen_tps":  5.834505096440202,
+                        "draft_n":  0,
+                        "draft_accepted":  0,
+                        "reasoning_chars":  0,
+                        "wall_ms":  17858,
+                        "sources":  [
+                                        "llm-setup.md#1",
+                                        "llm-setup.md#0"
+                                    ],
+                        "answer":  "The local LLM laptop has an Intel Core i7-1355U CPU [1]."
+                    },
+                    {
+                        "id":  "rag-unknown",
+                        "category":  "facts-local",
+                        "rep":  1,
+                        "pass":  false,
+                        "error":  "",
+                        "think":  false,
+                        "think_score":  -3,
+                        "should_think":  false,
+                        "json_valid":  false,
+                        "retries":  0,
+                        "prompt_tokens":  23,
+                        "prompt_ms":  3344.588,
+                        "gen_tokens":  136,
+                        "gen_tps":  5.622048424577097,
+                        "draft_n":  0,
+                        "draft_accepted":  0,
+                        "reasoning_chars":  0,
+                        "wall_ms":  28154,
+                        "sources":  [
+
+                                    ],
+                        "answer":  "I do not have access to your office network\u0027s Wi-Fi password. For security reasons, Wi-Fi credentials are private and specific to each organization.\n\nTo find the correct password, please:\n\n1. **Contact your IT department or network administrator.** They are the authorized source for this information.\n2. **Check your employee onboarding materials** or internal company portal, where network details are often listed.\n3. **Look at the router label** (if you have physical access), though in most office environments, the default password is changed for security, so this may not work.\n\nNever share Wi-Fi passwords publicly or with unauthorized individuals to maintain network security."
+                    }
+                ]
+}

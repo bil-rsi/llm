@@ -1,0 +1,122 @@
+﻿{
+    "summary":  [
+                    {
+                        "category":  "extract-json",
+                        "n":  3,
+                        "acc":  100,
+                        "med_ttft_s":  4.1,
+                        "med_wall_s":  18.5,
+                        "med_tps":  5.58
+                    },
+                    {
+                        "category":  "ALL",
+                        "n":  3,
+                        "acc":  100,
+                        "med_ttft_s":  4.1,
+                        "med_wall_s":  18.5,
+                        "med_tps":  5.58
+                    }
+                ],
+    "meta":  {
+                 "seed":  42,
+                 "think":  "auto",
+                 "server":  {
+                                "Budget":  512,
+                                "Alias":  "qwen3.6-35b-a3b",
+                                "Model":  "35b",
+                                "Draft":  "",
+                                "Ctx":  16384,
+                                "Profile":  "speed",
+                                "Reasoning":  "auto",
+                                "ThinkThreshold":  4,
+                                "Build":  "C:\\llm\\llama.cpp\\vulkan",
+                                "Spec":  "none",
+                                "Ub":  1024,
+                                "Port":  8080,
+                                "Ctv":  "f16",
+                                "RagK":  2,
+                                "Ctk":  "f16",
+                                "RagTokens":  800
+                            },
+                 "profile":  "speed",
+                 "tag":  "smoke",
+                 "total_wall_s":  65.6,
+                 "model":  "35b",
+                 "reps":  1,
+                 "set":  "C:\\llm\\eval\\evalset.jsonl"
+             },
+    "results":  [
+                    {
+                        "id":  "json-classify",
+                        "category":  "extract-json",
+                        "rep":  1,
+                        "pass":  true,
+                        "error":  "",
+                        "think":  false,
+                        "think_score":  -2,
+                        "should_think":  false,
+                        "json_valid":  true,
+                        "retries":  0,
+                        "prompt_tokens":  32,
+                        "prompt_ms":  4751.301,
+                        "gen_tokens":  71,
+                        "gen_tps":  5.373388309748508,
+                        "draft_n":  0,
+                        "draft_accepted":  0,
+                        "reasoning_chars":  0,
+                        "wall_ms":  18505,
+                        "sources":  [
+
+                                    ],
+                        "answer":  "{\n  \"label\": \"bug\",\n  \"confidence\": 0.98,\n  \"reason\": \"The user is reporting a specific, reproducible error (crash) triggered by a specific action (clicking Save on an empty form), which indicates a software defect rather than a feature request or general\"\n}"
+                    },
+                    {
+                        "id":  "json-invoice",
+                        "category":  "extract-json",
+                        "rep":  1,
+                        "pass":  true,
+                        "error":  "",
+                        "think":  false,
+                        "think_score":  0,
+                        "should_think":  false,
+                        "json_valid":  true,
+                        "retries":  0,
+                        "prompt_tokens":  52,
+                        "prompt_ms":  3962.791,
+                        "gen_tokens":  65,
+                        "gen_tps":  5.577125767236042,
+                        "draft_n":  0,
+                        "draft_accepted":  0,
+                        "reasoning_chars":  0,
+                        "wall_ms":  16284,
+                        "sources":  [
+
+                                    ],
+                        "answer":  "{\n  \"name\": \"Rina Hartono\",\n  \"company\": \"PT Contoh Jaya\",\n  \"date\": \"2026-03-14\",\n  \"amount\": 4500000,\n  \"currency\": \"IDR\"\n}"
+                    },
+                    {
+                        "id":  "json-leap",
+                        "category":  "extract-json",
+                        "rep":  1,
+                        "pass":  true,
+                        "error":  "",
+                        "think":  false,
+                        "think_score":  -2,
+                        "should_think":  false,
+                        "json_valid":  true,
+                        "retries":  0,
+                        "prompt_tokens":  27,
+                        "prompt_ms":  4073.678,
+                        "gen_tokens":  148,
+                        "gen_tps":  5.692038418084172,
+                        "draft_n":  0,
+                        "draft_accepted":  0,
+                        "reasoning_chars":  0,
+                        "wall_ms":  30829,
+                        "sources":  [
+
+                                    ],
+                        "answer":  "{\n\t\t\"answer\": \"no\",\n\t\t\"reason\": \"The Gregorian calendar leap year rules are: 1) A year divisible by 4 is a leap year, unless: 2) It is also divisible by 100, in which case it is NOT a leap year, unless: 3) It is also divisible by 400, in which case it IS a leap year. 2100 is divisible by 4 (2100 / 4 = 525). However, 2100 is also a \"\n\n\t\t}"
+                    }
+                ]
+}
