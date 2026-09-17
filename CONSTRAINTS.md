@@ -50,6 +50,12 @@ Environment these rules assume: Windows PowerShell 5.1, Pester 3.4.0 (the versio
 |---|---|---|---|
 | — | none | — | — |
 
+## Change log
+
+| Date | Change | Approved by | Reason |
+|---|---|---|---|
+| 2026-09-17 | `deep-profile` query accepts either `Offline batch jobs only` (README table) or `offline batch jobs through the \`deep\` profile` (models.md) | user, during Task 2 | Both passages answer the query; the fixture had wrongly accepted only one. All other queries are unchanged |
+
 ## Known gaps (not constraints, tracked here so they aren't forgotten)
 
 - The retrieval fixture already scores 1.0 on every metric, so it catches regressions but **can't show improvements**. It needs harder queries or a bigger corpus before it can justify ranking changes.

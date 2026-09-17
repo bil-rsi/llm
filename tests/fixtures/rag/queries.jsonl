@@ -12,7 +12,7 @@
 {"id":"q5-rejected","query":"why was Q5_K_M rejected","needle":"too little room for the KV cache"}
 {"id":"quant-size","query":"file size of the Q8_0 quant","needle":"30.2 GB"}
 {"id":"draft-removed","query":"speculative decoding draft model acceptance rate","needle":"below 40 percent"}
-{"id":"deep-profile","query":"which profile is for offline batch jobs","needle":"Offline batch jobs only"}
+{"id":"deep-profile","query":"which profile is for offline batch jobs","needle":["Offline batch jobs only","offline batch jobs through the `deep` profile"]}
 {"id":"kv-sweep","query":"benchmark the KV cache types","needle":"-Ctk f16,q8_0,q4_0"}
 {"id":"eval-compare","query":"compare two eval runs","needle":"-Compare logs\\eval\\a.json"}
 {"id":"web-ui","query":"web UI address","needle":"http://127.0.0.1:8080"}

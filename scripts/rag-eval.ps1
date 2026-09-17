@@ -20,8 +20,9 @@ try {
     $loadMs = (Measure-Command { & $rag { $script:Index = $null; Get-RagIndex | Out-Null } }).TotalMilliseconds
     $queries = @(Get-Content "$Fixture\queries.jsonl" | Where-Object { $_.Trim() } | ForEach-Object { $_ | ConvertFrom-Json })
 
-    # Rank = position of the first retrieved chunk whose text contains the needle (0 = not retrieved).
-    function Get-Rank($Hits, [string]$Needle) { $i = 0; foreach ($h in @($Hits)) { $i++; if ($h.Chunk.text.Contains($Needle)) { return $i } }; 0 }
+    # Rank = position of the first retrieved chunk containing the needle, or any of them when the query has
+    # several equally correct answers (0 = not retrieved).
+    function Get-Rank($Hits, $Needle) { $i = 0; foreach ($h in @($Hits)) { $i++; foreach ($nd in @($Needle)) { if ($h.Chunk.text.Contains($nd)) { return $i } } }; 0 }
     $rows = foreach ($q in $queries) {
         [pscustomobject]@{
             id       = $q.id
