@@ -1,0 +1,22 @@
+# Model weights (multi-GB). Verify downloads against models\expected-sha256.txt, which stays tracked.
+*.gguf
+
+# llama.cpp release binaries (cpu\, vulkan\) and the zips they were unpacked from
+/llama.cpp/
+
+# Server runtime state, rewritten by start.ps1 / stop.ps1 on every run
+/logs/server*.log
+/logs/server.pid
+/logs/server.profile.json
+
+# Per-run outputs of bench.ps1, eval.ps1 and rag-eval.ps1 (git add -f one you want to keep as a baseline).
+# logs\bench-*.txt stay tracked: README.md cites them as the baseline benchmarks.
+/logs/bench/
+/logs/eval/
+/logs/rag-eval/
+
+# Rebuilt from rag\docs by rag-index.ps1; records local file mtimes
+/rag/index.json
+
+# Claude Code worktrees live inside the repo root
+/.claude/worktrees/
