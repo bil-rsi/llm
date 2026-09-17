@@ -48,6 +48,47 @@ Describe 'Split-Doc document order and headings' {
     }
 }
 
+Describe 'Split-Doc chunk boundaries' {
+    function Get-Word([string]$Text) { @($Text -split '\s+' | Where-Object { $_ }) }
+    $sentences = (1..400 | ForEach-Object { "Topic$_ has detail number $($_ * 7) in it." })
+
+    It 'never starts or ends a chunk mid-word when packing paragraphs (B2)' {
+        $text = (0..39 | ForEach-Object { $sentences[($_ * 10)..($_ * 10 + 4)] -join ' ' }) -join "`n`n"
+        $words = New-Object 'System.Collections.Generic.HashSet[string]' -ArgumentList (,[string[]](Get-Word $text))
+        $chunks = Split-TestDoc $text
+        $chunks.Count | Should BeGreaterThan 2
+        foreach ($c in $chunks) { $w = Get-Word $c.text; $words.Contains($w[0]) | Should Be $true; $words.Contains($w[-1]) | Should Be $true }
+    }
+
+    It 'starts the overlap at a sentence start when one is available' {
+        $text = (0..39 | ForEach-Object { $sentences[($_ * 10)..($_ * 10 + 4)] -join ' ' }) -join "`n`n"
+        foreach ($c in (Split-TestDoc $text | Select-Object -Skip 1)) { $c.text | Should Match '^Topic\d+ has' }
+    }
+
+    It 'splits a long paragraph at sentence ends within the size limit (B5)' {
+        $chunks = Split-TestDoc ($sentences[0..160] -join ' ')
+        $chunks.Count | Should BeGreaterThan 3
+        foreach ($c in $chunks) { $c.text.Length | Should Not BeGreaterThan 1400; $c.text | Should Match '^Topic\d+ has'; $c.text | Should Match 'in it\.$' }
+    }
+
+    It 'keeps all text of a long paragraph without sentence punctuation, cutting only at spaces' {
+        $text = ((1..900) | ForEach-Object { "w$_" }) -join ' '
+        $chunks = Split-TestDoc $text
+        foreach ($c in $chunks) { $c.text.Length | Should Not BeGreaterThan 1400; $c.text | Should Match '^w\d+ '; $c.text | Should Match ' w\d+$' }
+        $seen = @{}; foreach ($c in $chunks) { foreach ($w in Get-Word $c.text) { $seen[$w] = 1 } }
+        $seen.Count | Should Be 900
+    }
+
+    It 'hard-cuts a single token longer than the chunk size without losing characters' {
+        $blob = 'x' * 3000
+        $chunks = Split-TestDoc "before`n`n$blob`n`nafter"
+        foreach ($c in $chunks) { $c.text.Length | Should Not BeGreaterThan 1400 }
+        (($chunks | ForEach-Object { $_.text }) -join '' -replace '[^x]', '').Length | Should Not BeLessThan 3000
+        $chunks[0].text | Should Match '^before'
+        $chunks[-1].text | Should Match 'after$'
+    }
+}
+
 Describe 'Update-RagIndex relative file names' {
     $long = "$TestDrive\long-folder-name-for-8dot3"
     New-Item -ItemType Directory -Force "$long\docs\sub" | Out-Null

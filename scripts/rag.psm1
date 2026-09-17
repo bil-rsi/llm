@@ -26,15 +26,32 @@ function Get-DocBlock([string]$Text) {
     }
 }
 
-# Cuts text longer than $Size into pieces of at most $Size chars.
+# Cuts text longer than $Size into pieces of at most $Size chars: at the last sentence end in the second half of
+# the window, else at the last whitespace, else (one huge token) at exactly $Size.
 function Split-LongText([string]$Text, [int]$Size) {
-    for ($i = 0; $i -lt $Text.Length; $i += $Size) { $Text.Substring($i, [math]::Min($Size, $Text.Length - $i)) }
+    $rest = $Text
+    while ($rest.Length -gt $Size) {
+        $window = $rest.Substring(0, $Size + 1)
+        $cut = $Size
+        $ends = [regex]::Matches($window, '[.!?](?=\s)')
+        if ($ends.Count -and $ends[$ends.Count - 1].Index -ge $Size / 2) { $cut = $ends[$ends.Count - 1].Index + 1 }
+        elseif (($ws = $window.LastIndexOfAny([char[]]" `t`n")) -gt 0) { $cut = $ws }
+        $rest.Substring(0, $cut).TrimEnd(); $rest = $rest.Substring($cut).TrimStart()
+    }
+    if ($rest) { $rest }
 }
 
-# Tail of a finished chunk that is repeated at the start of the next chunk in the same section.
+# Tail of a finished chunk (at most $Overlap - 2 chars) repeated at the start of the next chunk in the same
+# section. Starts at the first sentence start inside the window, else the first word start, else no overlap.
 function Get-OverlapTail([string]$Text, [int]$Overlap) {
-    if ($Overlap -le 2) { return '' }
-    $Text.Substring([math]::Max(0, $Text.Length - ($Overlap - 2)))
+    $max = $Overlap - 2
+    if ($max -le 0) { return '' }
+    if ($Text.Length -le $max) { return $Text }
+    $window = $Text.Substring($Text.Length - $max)
+    foreach ($pattern in '(?<=[.!?])\s+(?=\S)', '\s+(?=\S)') {
+        $m = [regex]::Match($window, $pattern); if ($m.Success) { return $window.Substring($m.Index + $m.Length) }
+    }
+    ''
 }
 
 # Chunks never cross a heading; within a section, paragraphs are packed up to $Size and each chunk
