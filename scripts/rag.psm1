@@ -8,6 +8,7 @@ $Stop = @('the','a','an','and','or','of','to','in','on','for','is','are','was','
           'what','how','do','does','i','you','my','your','we','can','yang','dan','di','ke','dari','ini','itu','untuk','dengan','adalah','apa','bagaimana')
 $StopSet = New-Object 'System.Collections.Generic.HashSet[string]' -ArgumentList (,[string[]]$Stop)
 $Exts = @('.md', '.txt', '.ps1', '.py', '.js', '.ts', '.json', '.yaml', '.yml', '.csv', '.html', '.log')
+$ChunkerVersion = 2            # bump whenever Split-Doc output changes: forces a full re-chunk of every file
 $script:Index = $null
 
 function Get-Tokens([string]$Text) {
@@ -38,11 +39,14 @@ function Split-Doc([string]$Rel, [string]$Text, [int]$Size = 1200, [int]$Overlap
 function Update-RagIndex {
     $docs = "$RagRoot\docs"; $idxFile = "$RagRoot\index.json"
     New-Item -ItemType Directory -Force $docs | Out-Null
-    $old = @{}; $oldMtime = @{}
+    $old = @{}; $oldMtime = @{}; $rebuilt = $false
     if (Test-Path $idxFile) {
         $prev = Get-Content $idxFile -Raw | ConvertFrom-Json
-        foreach ($c in $prev.chunks) { if (-not $old[$c.file]) { $old[$c.file] = New-Object System.Collections.ArrayList }; [void]$old[$c.file].Add($c) }
-        foreach ($p in $prev.files.PSObject.Properties) { $oldMtime[$p.Name] = $p.Value }
+        $prevVersion = if ($prev.chunker) { [int]$prev.chunker } else { 1 }
+        if ($prevVersion -eq $ChunkerVersion) {
+            foreach ($c in $prev.chunks) { if (-not $old[$c.file]) { $old[$c.file] = New-Object System.Collections.ArrayList }; [void]$old[$c.file].Add($c) }
+            foreach ($p in $prev.files.PSObject.Properties) { $oldMtime[$p.Name] = $p.Value }
+        } else { $rebuilt = $true }
     }
     $chunks = New-Object System.Collections.ArrayList; $files = [ordered]@{}; $changed = 0
     foreach ($f in Get-ChildItem $docs -Recurse -File | Where-Object { $Exts -contains $_.Extension.ToLower() }) {
@@ -51,9 +55,10 @@ function Update-RagIndex {
         if ($oldMtime[$rel] -eq $mt -and $old[$rel]) { $chunks.AddRange(@($old[$rel])) }
         else { $chunks.AddRange(@(Split-Doc $rel ([IO.File]::ReadAllText($f.FullName)))); $changed++ }
     }
-    @{ files = $files; chunks = $chunks } | ConvertTo-Json -Depth 5 -Compress | Set-Content $idxFile -Encoding UTF8
+    @{ chunker = $ChunkerVersion; files = $files; chunks = $chunks } | ConvertTo-Json -Depth 5 -Compress | Set-Content $idxFile -Encoding UTF8
     $script:Index = $null
-    Write-Host "Indexed $($files.Count) files ($changed changed) into $($chunks.Count) chunks: $idxFile"
+    $note = if ($rebuilt) { " (chunker v$prevVersion -> v$ChunkerVersion, rebuilt all)" } else { '' }
+    Write-Host "Indexed $($files.Count) files ($changed changed) into $($chunks.Count) chunks: $idxFile$note"
 }
 
 function Get-RagIndex {
