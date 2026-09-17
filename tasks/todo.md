@@ -1,4 +1,4 @@
-﻿# Todo: RAG chunking correctness upgrade
+# Todo: RAG chunking correctness upgrade
 
 - [x] Task 1: Pester harness + chunker version (B4)
 - [x] Task 2: Block parser + heading boundaries + document order (B1, B3)
