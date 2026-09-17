@@ -2,7 +2,7 @@
 Import-Module "$PSScriptRoot\..\scripts\rag.psm1" -DisableNameChecking -Force
 $rag = Get-Module rag
 
-function Split-TestDoc([string]$Text, [int]$Size = 1200, [int]$Overlap = 200) { @(& $rag { param($t, $s, $o) Split-Doc 'doc.md' $t $s $o } $Text $Size $Overlap) }
+function Split-TestDoc([string]$Text, [int]$Size = 1200, [int]$Overlap = 200) { ,@(& $rag { param($t, $s, $o) Split-Doc 'doc.md' $t $s $o } $Text $Size $Overlap) }
 function Use-TempRagRoot([string]$Root) { New-Item -ItemType Directory -Force "$Root\docs" | Out-Null; & $rag { param($r) $script:RagRoot = $r; $script:Index = $null } $Root }
 function Read-Index([string]$Root) { Get-Content "$Root\index.json" -Raw | ConvertFrom-Json }
 function Write-Index([string]$Root, $Index) { $Index | ConvertTo-Json -Depth 5 -Compress | Set-Content "$Root\index.json" -Encoding UTF8 }
@@ -86,6 +86,45 @@ Describe 'Split-Doc chunk boundaries' {
         (($chunks | ForEach-Object { $_.text }) -join '' -replace '[^x]', '').Length | Should Not BeLessThan 3000
         $chunks[0].text | Should Match '^before'
         $chunks[-1].text | Should Match 'after$'
+    }
+}
+
+Describe 'Split-Doc code fences and tables' {
+    function Get-Line([string]$Text) { @($Text -split '\r?\n' | Where-Object { $_.Trim() }) }
+    $filler = (1..32 | ForEach-Object { "Filler sentence $_ goes here." }) -join ' '     # ~920 chars: filler + fence > 1200, fence alone fits
+
+    It 'keeps a fenced block with blank lines in one chunk when it fits' {
+        $fence = "``````powershell`n" + ((1..12 | ForEach-Object { "Get-Thing -Id $_ | Out-Null`n" }) -join "`n") + "``````"
+        $chunks = Split-TestDoc "# Code`n`n$filler`n`n$fence`n`nafter text"
+        @($chunks | Where-Object { $_.text.Contains($fence) }).Count | Should Be 1
+    }
+
+    It 'does not treat # lines inside a fence as headings' {
+        $chunks = Split-TestDoc "# Title`n`n``````powershell`n# not a heading`nGet-Thing`n```````n`n## Next`n`ntext"
+        ($chunks | ForEach-Object { $_.heading }) -join '|' | Should Be 'Title|Next'
+        $chunks[0].text | Should Match '# not a heading'
+    }
+
+    It 'splits a fence longer than the chunk size only at line ends' {
+        $lines = 1..120 | ForEach-Object { "    Invoke-Step -Name step$_ -Verbose" }
+        $source = New-Object 'System.Collections.Generic.HashSet[string]' -ArgumentList (,[string[]]($lines + "``````powershell" + "``````"))
+        $chunks = Split-TestDoc ("``````powershell`n" + ($lines -join "`n") + "`n``````")
+        $chunks.Count | Should BeGreaterThan 2
+        foreach ($c in $chunks) { $c.text.Length | Should Not BeGreaterThan 1400; foreach ($l in Get-Line $c.text) { $source.Contains($l) | Should Be $true } }
+    }
+
+    It 'splits a long table only at row ends, overlap included' {
+        $rows = 1..70 | ForEach-Object { "| ``cmd$_.ps1 -Flag e.g. value`` | Does thing number $_. Then more. |" }
+        $source = New-Object 'System.Collections.Generic.HashSet[string]' -ArgumentList (,[string[]]($rows + '| Command | Purpose |' + '|---|---|'))
+        $chunks = Split-TestDoc ("| Command | Purpose |`n|---|---|`n" + ($rows -join "`n"))
+        $chunks.Count | Should BeGreaterThan 2
+        foreach ($c in $chunks) { foreach ($l in Get-Line $c.text) { $source.Contains($l) | Should Be $true } }
+    }
+
+    It 'runs an unclosed fence to the end of the document' {
+        $chunks = Split-TestDoc "# T`n`n``````text`nline one`n`n# still code`nline two"
+        $chunks.Count | Should Be 1
+        $chunks[0].text | Should Match 'line two$'
     }
 }
 

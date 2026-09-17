@@ -5,6 +5,6 @@
 - [x] Task 1b: Relative file names for short/trailing-slash roots (B6)
 - [x] Task 3: Boundary-aware overlap and hard splits (B2, B5)
 - [x] Checkpoint A: fixture chunk dump + retrieval eval vs baseline (retrieval 1.0; tables still cut mid-row -> Task 4)
-- [ ] Task 4: Code fences kept whole
+- [x] Task 4: Code fences kept whole
 - [ ] Task 5: README + end-to-end verification
 - [ ] Checkpoint B: check.ps1 -Stage task green, diff < ~300 lines

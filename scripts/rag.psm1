@@ -15,40 +15,61 @@ function Get-Tokens([string]$Text) {
     foreach ($t in [regex]::Split($Text.ToLowerInvariant(), '[^\p{L}\p{N}_]+')) { if ($t.Length -gt 1 -and -not $StopSet.Contains($t)) { $t } }
 }
 
-# Blocks = heading lines and blank-line-separated paragraphs, in document order.
+# Blocks = headings, blank-line-separated paragraphs and fenced code blocks, in document order.
+# Kind 'lines' (fences, tables) is only ever cut at line ends; 'prose' at sentence or word ends.
 function Get-DocBlock([string]$Text) {
-    $para = New-Object System.Collections.ArrayList
-    foreach ($line in ($Text -split '\r?\n') + '') {
+    $para = New-Object System.Collections.ArrayList; $inFence = $false
+    foreach ($line in ($Text -split '\r?\n') + '') {          # trailing '' flushes the last paragraph
+        $isFence = $line -match '^\s*(```|~~~)'
+        if ($inFence) {
+            [void]$para.Add($line)
+            if ($isFence) { ConvertTo-DocBlock $para 'lines'; $para.Clear(); $inFence = $false }
+            continue
+        }
         $isHeading = $line -match '^#{1,6}\s+\S'
-        if (($isHeading -or -not $line.Trim()) -and $para.Count) { [pscustomobject]@{ Heading = $null; Text = ($para -join "`n").Trim() }; $para.Clear() }
-        if ($isHeading) { [pscustomobject]@{ Heading = ($line -replace '^#{1,6}\s+', '').Trim(); Text = $line.Trim() } }
+        if (($isFence -or $isHeading -or -not $line.Trim()) -and $para.Count) { ConvertTo-DocBlock $para; $para.Clear() }
+        if ($isFence) { [void]$para.Add($line); $inFence = $true }
+        elseif ($isHeading) { [pscustomobject]@{ Heading = ($line -replace '^#{1,6}\s+', '').Trim(); Kind = 'heading'; Text = $line.Trim() } }
         elseif ($line.Trim()) { [void]$para.Add($line) }
     }
+    if ($para.Count) { ConvertTo-DocBlock $para 'lines' }            # unclosed fence runs to the end
 }
 
-# Cuts text longer than $Size into pieces of at most $Size chars: at the last sentence end in the second half of
-# the window, else at the last whitespace, else (one huge token) at exactly $Size.
-function Split-LongText([string]$Text, [int]$Size) {
+# A paragraph whose every line is a table row counts as 'lines'.
+function ConvertTo-DocBlock($Lines, [string]$Kind = '') {
+    if (-not $Kind) { $Kind = if (@($Lines | Where-Object { -not $_.TrimStart().StartsWith('|') }).Count) { 'prose' } else { 'lines' } }
+    [pscustomobject]@{ Heading = $null; Kind = $Kind; Text = ($Lines -join "`n").Trim() }
+}
+
+# Cuts text longer than $Size into pieces of at most $Size chars. 'lines' blocks: at the last line end.
+# 'prose': at the last sentence end in the second half of the window, else the last whitespace.
+# A single token longer than $Size is cut at exactly $Size.
+function Split-LongText([string]$Text, [int]$Size, [string]$Kind = 'prose') {
     $rest = $Text
     while ($rest.Length -gt $Size) {
         $window = $rest.Substring(0, $Size + 1)
         $cut = $Size
         $ends = [regex]::Matches($window, '[.!?](?=\s)')
-        if ($ends.Count -and $ends[$ends.Count - 1].Index -ge $Size / 2) { $cut = $ends[$ends.Count - 1].Index + 1 }
-        elseif (($ws = $window.LastIndexOfAny([char[]]" `t`n")) -gt 0) { $cut = $ws }
-        $rest.Substring(0, $cut).TrimEnd(); $rest = $rest.Substring($cut).TrimStart()
+        $nl = $window.LastIndexOf("`n"); $ws = $window.LastIndexOfAny([char[]]" `t`n")
+        if ($Kind -eq 'lines' -and $nl -gt 0) { $cut = $nl }
+        elseif ($Kind -ne 'lines' -and $ends.Count -and $ends[$ends.Count - 1].Index -ge $Size / 2) { $cut = $ends[$ends.Count - 1].Index + 1 }
+        elseif ($ws -gt 0) { $cut = $ws }
+        $rest.Substring(0, $cut).TrimEnd()
+        $rest = if ($Kind -eq 'lines') { $rest.Substring($cut).TrimStart("`r`n".ToCharArray()) } else { $rest.Substring($cut).TrimStart() }   # keep code indentation
     }
     if ($rest) { $rest }
 }
 
 # Tail of a finished chunk (at most $Overlap - 2 chars) repeated at the start of the next chunk in the same
-# section. Starts at the first sentence start inside the window, else the first word start, else no overlap.
-function Get-OverlapTail([string]$Text, [int]$Overlap) {
+# section. Starts at the first line start ('lines') or sentence start ('prose') inside the window, else the
+# first word start, else there is no overlap.
+function Get-OverlapTail([string]$Text, [int]$Overlap, [string]$Kind = 'prose') {
     $max = $Overlap - 2
     if ($max -le 0) { return '' }
     if ($Text.Length -le $max) { return $Text }
     $window = $Text.Substring($Text.Length - $max)
-    foreach ($pattern in '(?<=[.!?])\s+(?=\S)', '\s+(?=\S)') {
+    $patterns = if ($Kind -eq 'lines') { @('\n+(?=[^\n])') } else { @('(?<=[.!?])\s+(?=\S)', '\s+(?=\S)') }
+    foreach ($pattern in $patterns) {
         $m = [regex]::Match($window, $pattern); if ($m.Success) { return $window.Substring($m.Index + $m.Length) }
     }
     ''
@@ -58,17 +79,18 @@ function Get-OverlapTail([string]$Text, [int]$Overlap) {
 # after the first starts with an overlap tail of the previous one (so text <= $Size + $Overlap).
 function Split-Doc([string]$Rel, [string]$Text, [int]$Size = 1200, [int]$Overlap = 200) {
     $chunks = New-Object System.Collections.ArrayList
-    $heading = ''; $buf = ''; $hasBody = $false; $carry = ''
+    $heading = ''; $buf = ''; $hasBody = $false; $carry = ''; $lastKind = 'prose'
     foreach ($b in Get-DocBlock $Text) {
-        if ($null -ne $b.Heading) {
+        if ($b.Kind -eq 'heading') {
             if ($hasBody) { [void]$chunks.Add(@{ heading = $heading; text = $buf }) }
             $heading = $b.Heading; $buf = $b.Text; $hasBody = $false; $carry = ''
             continue
         }
-        foreach ($piece in @(if ($b.Text.Length -gt $Size) { Split-LongText $b.Text $Size } else { $b.Text })) {
+        foreach ($piece in @(if ($b.Text.Length -gt $Size) { Split-LongText $b.Text $Size $b.Kind } else { $b.Text })) {
             if ($hasBody -and $buf.Length + 2 + $piece.Length -gt $Size) {
-                [void]$chunks.Add(@{ heading = $heading; text = $buf }); $carry = Get-OverlapTail $buf $Overlap; $buf = ''
+                [void]$chunks.Add(@{ heading = $heading; text = $buf }); $carry = Get-OverlapTail $buf $Overlap $lastKind; $buf = ''
             }
+            $lastKind = $b.Kind
             $prefix = if ($buf) { $buf } else { $carry }
             $buf = if ($prefix) { "$prefix`n`n$piece" } else { $piece }; $hasBody = $true
         }
