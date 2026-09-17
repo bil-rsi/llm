@@ -1,4 +1,4 @@
-# Spec: RAG chunking correctness upgrade
+﻿# Spec: RAG chunking correctness upgrade
 
 Status: **APPROVED 2026-09-17**
 
@@ -10,10 +10,11 @@ Make `Split-Doc` in `scripts\rag.psm1` produce chunks that are in document order
 
 | # | Bug | Reproduction |
 |---|---|---|
-| B1 | A paragraph longer than `$Size` is emitted **before** the buffered text that came ahead of it | `# A` / short intro / 1,800-char paragraph → chunk 0 is the long paragraph, chunk 1 is the intro |
-| B2 | Overlap is cut at a fixed character offset, so chunks start mid-word | 8 paragraphs of ~200 chars → chunk 1 starts with `5 word5` |
-| B3 | The overlap carried into the next chunk is labelled with the *next* heading | `# Alpha` (1,100 chars) / `# Beta` → chunk 1 has heading `Beta` but starts with Alpha's text |
+| B1 | A paragraph longer than `$Size` is emitted **before** the buffered text that came ahead of it | `# A` / short intro / 1,800-char paragraph â†’ chunk 0 is the long paragraph, chunk 1 is the intro |
+| B2 | Overlap is cut at a fixed character offset, so chunks start mid-word | 8 paragraphs of ~200 chars â†’ chunk 1 starts with `5 word5` |
+| B3 | The overlap carried into the next chunk is labelled with the *next* heading | `# Alpha` (1,100 chars) / `# Beta` â†’ chunk 1 has heading `Beta` but starts with Alpha's text |
 | B4 | Unchanged files keep chunks produced by an older chunker | `Update-RagIndex` reuses chunks when mtime matches (`rag.psm1:51`); the index has no chunker version |
+| B6 | Stored file names are mangled when the RAG root is an 8.3 short path or ends in `\` (`odels.md`) | `Update-RagIndex` strips `docs.Length + 1` chars from long-form child paths (`rag.psm1:78`); found during Task 2, added with approval |
 | B5 | Hard splits of long paragraphs and code blocks ignore sentence and line boundaries | Same cut as B2, applied inside the long-paragraph loop (`rag.psm1:24`) |
 
 ## Acceptance criteria
@@ -22,7 +23,7 @@ Make `Split-Doc` in `scripts\rag.psm1` produce chunks that are in document order
 2. No chunk starts or ends mid-word. The overlap starts at a sentence boundary, or at a word boundary if no sentence boundary exists within the overlap window.
 3. A new heading starts a new chunk. Overlap never crosses a heading, so each chunk's `heading` is the heading its first line falls under.
 4. A fenced code block (```` ``` ````) no longer than `$Size` is never split, even if it contains blank lines. A longer one is split on line boundaries.
-5. Chunk text length is ≤ `$Size` + `$Overlap`, except for a single word that is itself longer than that.
+5. Chunk text length is â‰¤ `$Size` + `$Overlap`, except for a single word that is itself longer than that.
 6. `index.json` records `chunker = <int>`. When it differs from the module's value, `Update-RagIndex` re-chunks every file and reports it in its output line.
 7. `Search-Rag`, `Format-RagPrompt`, `Update-RagIndex` and `Get-Tokens` keep their signatures and output shapes (`id`, `file`, `heading`, `text`).
 8. `check.ps1 -Stage task` passes: the retrieval eval has no metric below the baseline, and there are no new lint warnings.
@@ -51,7 +52,7 @@ Match `rag.psm1`: dense one-line statements, `System.Collections.ArrayList`, no 
 
 ## Testing strategy
 
-- Write a failing test first for each bug B1–B5 and for acceptance criteria 4 and 6. `Split-Doc` is internal, so tests call it through `& (Get-Module rag) { Split-Doc ... }`.
+- Write a failing test first for each bug B1â€“B5 and for acceptance criteria 4 and 6. `Split-Doc` is internal, so tests call it through `& (Get-Module rag) { Split-Doc ... }`.
 - Test the rebuild trigger (B4) with a temporary `$RagRoot` set the same way `rag-eval.ps1` does. Tests never touch `C:\llm\rag`.
 - Regression: the retrieval eval must match the baseline, and `eval.ps1 -Category facts-local` must not drop (checked at /review, needs the server).
 

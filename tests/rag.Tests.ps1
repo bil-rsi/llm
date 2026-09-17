@@ -48,6 +48,22 @@ Describe 'Split-Doc document order and headings' {
     }
 }
 
+Describe 'Update-RagIndex relative file names' {
+    $long = "$TestDrive\long-folder-name-for-8dot3"
+    New-Item -ItemType Directory -Force "$long\docs\sub" | Out-Null
+    Set-Content "$long\docs\models.md" 'model notes' -Encoding UTF8
+    Set-Content "$long\docs\sub\notes.txt" 'sub notes' -Encoding UTF8
+    $short = (New-Object -ComObject Scripting.FileSystemObject).GetFolder((Get-Item $long).FullName).ShortPath
+
+    foreach ($case in @(@{ Name = 'a long path'; Root = (Get-Item $long).FullName }, @{ Name = 'an 8.3 short path'; Root = $short }, @{ Name = 'a trailing backslash'; Root = "$long\" })) {
+        It "stores paths relative to docs when the root is $($case.Name)" {
+            Use-TempRagRoot $case.Root
+            Update-RagIndex 6>$null
+            ((Read-Index $case.Root).files.PSObject.Properties.Name | Sort-Object) -join ',' | Should Be 'models.md,sub/notes.txt'
+        }
+    }
+}
+
 Describe 'Update-RagIndex chunker version' {
     $root = "$TestDrive\rag"
     Use-TempRagRoot $root

@@ -64,6 +64,7 @@ function Split-Doc([string]$Rel, [string]$Text, [int]$Size = 1200, [int]$Overlap
 function Update-RagIndex {
     $docs = "$RagRoot\docs"; $idxFile = "$RagRoot\index.json"
     New-Item -ItemType Directory -Force $docs | Out-Null
+    $docs = (Get-Item -LiteralPath $docs).FullName.TrimEnd('\')    # long-name form, as Get-ChildItem reports children
     $old = @{}; $oldMtime = @{}; $rebuilt = $false
     if (Test-Path $idxFile) {
         $prev = Get-Content $idxFile -Raw | ConvertFrom-Json
