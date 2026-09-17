@@ -128,6 +128,31 @@ Describe 'Split-Doc code fences and tables' {
     }
 }
 
+Describe 'Split-Doc keeps all text' {
+    function Get-MissingLine([string]$Rel, [string]$Text) {
+        $all = (@(& $rag { param($r, $t) Split-Doc $r $t } $Rel $Text) | ForEach-Object { $_.text }) -join "`n"
+        @($Text -split '\r?\n' | Where-Object { $_.Trim() -and -not $all.Contains($_.Trim()) })
+    }
+
+    It 'keeps consecutive and trailing markdown headings' {
+        Get-MissingLine 'doc.md' "# Parent`n`n## Child`n`nbody text`n`n## Empty at end" | Should BeNullOrEmpty
+    }
+
+    It 'does not treat # comments in code files as headings (review finding)' {
+        $code = "# Usage: ask.ps1 question`n# Second comment`nparam([string]`$Prompt)`n`n# Section comment`nInvoke-Thing `$Prompt"
+        $chunks = @(& $rag { param($t) Split-Doc 'scripts/ask.ps1' $t } $code)
+        $chunks.Count | Should Be 1
+        $chunks[0].heading | Should Be ''
+        Get-MissingLine 'scripts/ask.ps1' $code | Should BeNullOrEmpty
+    }
+
+    It 'keeps every line of the real scripts and fixture docs' {
+        foreach ($f in @(Get-ChildItem "$PSScriptRoot\..\scripts\*.ps1") + @(Get-ChildItem "$PSScriptRoot\fixtures\rag\docs\*.md")) {
+            Get-MissingLine $f.Name ([IO.File]::ReadAllText($f.FullName)) | Should BeNullOrEmpty
+        }
+    }
+}
+
 Describe 'Update-RagIndex relative file names' {
     $long = "$TestDrive\long-folder-name-for-8dot3"
     New-Item -ItemType Directory -Force "$long\docs\sub" | Out-Null

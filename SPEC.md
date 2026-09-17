@@ -72,3 +72,4 @@ Match `rag.psm1`: dense one-line statements, `System.Collections.ArrayList`, no 
 ## Decisions
 
 - Headings are hard chunk boundaries (approved 2026-09-17).
+- Found at /review: headings and fences are recognised only in `.md`/`.markdown`. Other indexed files are plain paragraphs, cut at line ends (`.txt` at sentence ends), because `#` comments in `.ps1`/`.py`/`.yaml` were being taken as headings and dropped. A heading with no body (e.g. `# Parent` directly before `## Child`) is kept as leading text of the next section, whose `heading` is the innermost one. Chunker version 3.

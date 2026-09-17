@@ -8,7 +8,7 @@ $Stop = @('the','a','an','and','or','of','to','in','on','for','is','are','was','
           'what','how','do','does','i','you','my','your','we','can','yang','dan','di','ke','dari','ini','itu','untuk','dengan','adalah','apa','bagaimana')
 $StopSet = New-Object 'System.Collections.Generic.HashSet[string]' -ArgumentList (,[string[]]$Stop)
 $Exts = @('.md', '.txt', '.ps1', '.py', '.js', '.ts', '.json', '.yaml', '.yml', '.csv', '.html', '.log')
-$ChunkerVersion = 2            # bump whenever Split-Doc output changes: forces a full re-chunk of every file
+$ChunkerVersion = 3           # bump whenever Split-Doc output changes: forces a full re-chunk of every file
 $script:Index = $null
 
 function Get-Tokens([string]$Text) {
@@ -16,18 +16,20 @@ function Get-Tokens([string]$Text) {
 }
 
 # Blocks = headings, blank-line-separated paragraphs and fenced code blocks, in document order.
-# Kind 'lines' (fences, tables) is only ever cut at line ends; 'prose' at sentence or word ends.
-function Get-DocBlock([string]$Text) {
+# Kind 'lines' (fences, tables, code files) is only ever cut at line ends; 'prose' at sentence or word ends.
+# Headings and fences are only recognised in markdown; other files are plain paragraphs of $PlainKind.
+function Get-DocBlock([string]$Text, [bool]$Markdown = $true, [string]$PlainKind = 'prose') {
     $para = New-Object System.Collections.ArrayList; $inFence = $false
+    $paraKind = if ($Markdown) { '' } else { $PlainKind }
     foreach ($line in ($Text -split '\r?\n') + '') {          # trailing '' flushes the last paragraph
-        $isFence = $line -match '^\s*(```|~~~)'
+        $isFence = $Markdown -and $line -match '^\s*(```|~~~)'
         if ($inFence) {
             [void]$para.Add($line)
             if ($isFence) { ConvertTo-DocBlock $para 'lines'; $para.Clear(); $inFence = $false }
             continue
         }
-        $isHeading = $line -match '^#{1,6}\s+\S'
-        if (($isFence -or $isHeading -or -not $line.Trim()) -and $para.Count) { ConvertTo-DocBlock $para; $para.Clear() }
+        $isHeading = $Markdown -and $line -match '^#{1,6}\s+\S'
+        if (($isFence -or $isHeading -or -not $line.Trim()) -and $para.Count) { ConvertTo-DocBlock $para $paraKind; $para.Clear() }
         if ($isFence) { [void]$para.Add($line); $inFence = $true }
         elseif ($isHeading) { [pscustomobject]@{ Heading = ($line -replace '^#{1,6}\s+', '').Trim(); Kind = 'heading'; Text = $line.Trim() } }
         elseif ($line.Trim()) { [void]$para.Add($line) }
@@ -80,10 +82,12 @@ function Get-OverlapTail([string]$Text, [int]$Overlap, [string]$Kind = 'prose') 
 function Split-Doc([string]$Rel, [string]$Text, [int]$Size = 1200, [int]$Overlap = 200) {
     $chunks = New-Object System.Collections.ArrayList
     $heading = ''; $buf = ''; $hasBody = $false; $carry = ''; $lastKind = 'prose'
-    foreach ($b in Get-DocBlock $Text) {
+    $plainKind = if ($Rel -match '\.txt$') { 'prose' } else { 'lines' }
+    foreach ($b in Get-DocBlock $Text ($Rel -match '\.(md|markdown)$') $plainKind) {
         if ($b.Kind -eq 'heading') {
-            if ($hasBody) { [void]$chunks.Add(@{ heading = $heading; text = $buf }) }
-            $heading = $b.Heading; $buf = $b.Text; $hasBody = $false; $carry = ''
+            if ($hasBody) { [void]$chunks.Add(@{ heading = $heading; text = $buf }); $buf = '' }
+            $buf = if ($buf) { "$buf`n`n$($b.Text)" } else { $b.Text }    # a heading with no body stays as text of the next section
+            $heading = $b.Heading; $hasBody = $false; $carry = ''
             continue
         }
         foreach ($piece in @(if ($b.Text.Length -gt $Size) { Split-LongText $b.Text $Size $b.Kind } else { $b.Text })) {
@@ -95,7 +99,7 @@ function Split-Doc([string]$Rel, [string]$Text, [int]$Size = 1200, [int]$Overlap
             $buf = if ($prefix) { "$prefix`n`n$piece" } else { $piece }; $hasBody = $true
         }
     }
-    if ($hasBody) { [void]$chunks.Add(@{ heading = $heading; text = $buf }) }
+    if ($buf) { [void]$chunks.Add(@{ heading = $heading; text = $buf }) }
     $i = 0
     foreach ($c in $chunks) { [pscustomobject]@{ id = "$Rel#$i"; file = $Rel; heading = $c.heading; text = $c.text }; $i++ }
 }
