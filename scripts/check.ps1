@@ -1,7 +1,7 @@
 # Runs the checks defined in C:\llm\CONSTRAINTS.md. Exit code 1 = a blocking check failed.
 # Usage: check.ps1 -Stage fast|task|full
 #   fast  lint errors in changed scripts + secret scan of uncommitted and untracked files (seconds)
-#   task  fast + lint warning ratchet + Pester unit tests + retrieval eval vs tests\fixtures\rag\baseline.json (< 60 s)
+#   task  fast + secret scan of branch commits + lint warning ratchet + Pester unit tests + retrieval eval vs baseline (< 60 s)
 #   full  task + eval.ps1 -Category facts-local against the running server            (minutes, needs start.ps1)
 param([ValidateSet('fast', 'task', 'full')][string]$Stage = 'task')
 $Root = Split-Path $PSScriptRoot -Parent
@@ -17,9 +17,14 @@ function Step([string]$Name, [scriptblock]$Body) {
     if (-not $ok) { [void]$failed.Add($Name) }
 }
 
-$Excluded = @(':(exclude)logs', ':(exclude)models', ':(exclude)llama.cpp')
-$changed = @(git -C $Root diff HEAD --name-only -- . $Excluded) + @(git -C $Root ls-files --others --exclude-standard -- . $Excluded) |
-    Where-Object { $_ -and (Test-Path "$Root\$_") } | Sort-Object -Unique
+# Changed = modified/added (not deleted) tracked files plus untracked, non-ignored files. Only server logs, model
+# weights and llama.cpp binaries are skipped; eval outputs under logs\ are scanned because they echo document text.
+[Console]::OutputEncoding = [Text.Encoding]::UTF8
+$Excluded = @(':(exclude)logs/server*', ':(exclude)models/*.gguf', ':(exclude)llama.cpp')
+function Get-GitPath([string[]]$GitArgs) { @(((git -c core.quotepath=off -C $Root @GitArgs -z -- . $Excluded) -join "`n") -split "`0" | Where-Object { $_ }) }
+$names = @(Get-GitPath @('diff', 'HEAD', '--name-only', '--diff-filter=d')) + @(Get-GitPath @('ls-files', '--others', '--exclude-standard')) | Sort-Object -Unique
+$changed = @($names | Where-Object { Test-Path -LiteralPath (Join-Path $Root $_) -PathType Leaf })
+$unresolved = @($names | Where-Object { -not (Test-Path -LiteralPath (Join-Path $Root $_)) })
 
 function Show-Lint($Results) { $Results | ForEach-Object { Write-Host ("   {0}:{1} {2} {3}" -f $_.ScriptName, $_.Line, $_.Severity, $_.RuleName) } }
 
@@ -34,14 +39,21 @@ Step 'lint changed scripts (PSScriptAnalyzer errors)' {
 
 Step 'secrets (gitleaks, uncommitted + untracked)' {
     if (-not (Test-Path $Gitleaks)) { throw "gitleaks not found at $Gitleaks" }
+    if ($unresolved.Count) { Write-Host "   could not resolve $($unresolved.Count) changed path(s), refusing to pass: $($unresolved -join ', ')"; return $false }
     if (-not $changed.Count) { Write-Host '   no uncommitted changes'; return $true }
-    $text = @(git -C $Root diff HEAD -- . $Excluded) + @($changed | ForEach-Object { Get-Content "$Root\$_" -Raw })
+    $text = @($changed | ForEach-Object { [IO.File]::ReadAllText((Join-Path $Root $_)) })
     ($text -join "`n") | & $Gitleaks stdin --redact --no-banner --log-level warn
     Write-Host "   scanned $($changed.Count) files"
     $LASTEXITCODE -eq 0
 }
 
 if ($Stage -in 'task', 'full') {
+    Step 'secrets in branch commits (gitleaks, master..HEAD)' {
+        $branch = git -C $Root rev-parse --abbrev-ref HEAD
+        if ($branch -eq 'master' -or -not (git -C $Root rev-parse --verify --quiet master)) { Write-Host '   on master or no master branch'; return $true }
+        & $Gitleaks git $Root --log-opts="master..HEAD" --redact --no-banner --log-level warn
+        $LASTEXITCODE -eq 0
+    }
     Step 'lint warning ratchet (all scripts)' {
         $r = @(Invoke-ScriptAnalyzer -Path "$Root\scripts" -Recurse -Settings "$Root\PSScriptAnalyzerSettings.psd1")
         $warnings = @($r | Where-Object Severity -eq 'Warning')
