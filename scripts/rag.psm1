@@ -190,4 +190,28 @@ function Format-RagPrompt([string]$Question, $Hits) {
     "Answer using ONLY the sources below and cite them as [n]. If the sources do not contain the answer, say `"Not in my documents`" and then, if useful, add general knowledge clearly labelled as such.`n<sources>`n$($src -join "`n`n")`n</sources>`n`nQuestion: $Question"
 }
 
-Export-ModuleMember -Function Update-RagIndex, Search-Rag, Format-RagPrompt, Get-Tokens
+# Markdown block for one correction: the question as a heading (so it chunks and retrieves like any
+# other section) with the correct answer as its body, and the wrong answer quoted underneath if given.
+function Format-Correction([string]$Question, [string]$Correct, [string]$Wrong = '') {
+    $q = ($Question -replace '\s+', ' ').Trim()
+    $body = "Correct answer: $($Correct.Trim())"
+    if ($Wrong) { $body += "`n`nPreviously answered (wrong): $($Wrong.Trim())" }
+    "## $q`n`n$body"
+}
+
+# Appends a correction to rag\docs\corrections.md and re-indexes so it's retrievable immediately.
+# Returns the new chunk's id (for callers to verify with Search-Rag), or '' if it can't be found.
+function Add-Correction([string]$Question, [string]$Correct, [string]$Wrong = '') {
+    $docs = "$RagRoot\docs"
+    New-Item -ItemType Directory -Force $docs | Out-Null
+    $file = "$docs\corrections.md"
+    if (-not (Test-Path $file)) { Set-Content $file "# Corrections`n" -Encoding UTF8 }
+    Add-Content $file "`n$(Format-Correction $Question $Correct $Wrong)`n" -Encoding UTF8
+    Update-RagIndex 6>$null
+    $label = ($Question -replace '\s+', ' ').Trim()
+    if ($label.Length -gt 120) { $label = $label.Substring(0, 120) }
+    $hit = @((Get-RagIndex).Items | Where-Object { $_.Chunk.file -eq 'corrections.md' -and $_.Chunk.heading -eq $label } | Select-Object -Last 1)
+    if ($hit.Count) { $hit[0].Chunk.id } else { '' }
+}
+
+Export-ModuleMember -Function Update-RagIndex, Search-Rag, Format-RagPrompt, Get-Tokens, Add-Correction

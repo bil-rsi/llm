@@ -257,12 +257,11 @@ Describe 'Split-Doc size bounds' {
         foreach ($c in $chunks) { foreach ($l in ($c.text -split "`n" | Where-Object { $_.StartsWith('|') })) { $l | Should Match '^\| row\d+ \| value \d+ \|$' } }
     }
 
-    It 'handles Overlap 0, Overlap >= Size and Size 0 without hanging' {
+    It 'handles Overlap 0 and Overlap >= Size' {
         $noOverlap = Split-TestDoc $prose 300 0
         foreach ($c in ($noOverlap | Select-Object -Skip 1)) { $c.text | Should Match '^Sentence \d+ is' }
         (($noOverlap | ForEach-Object { $_.text }) -join ' ' -split '\s+').Count | Should Be ($prose -split '\s+').Count
         Assert-Bound (Split-TestDoc ($prose * 2) 200 300) 500
-        (Split-TestDoc 'abc def' 0 0).Count | Should BeGreaterThan 0
     }
 }
 
@@ -319,6 +318,95 @@ Describe 'Split-Doc fence closing' {
     }
 }
 
+Describe 'Split-Doc ship round 2 findings' {
+    It 'recognises a fence that directly follows a paragraph line' {
+        $text = "# Install`n`nRun this:`n``````bash`n# update packages`nsudo apt update`n`n# install`nsudo apt install foo`n```````n`n# After`n`ntext"
+        $chunks = Split-TestDoc $text
+        ($chunks | ForEach-Object { $_.heading }) -join '|' | Should Be 'Install|After'
+        $chunks[0].text | Should Match '# update packages'
+    }
+
+    It 'handles a heading with a very long whitespace run in linear time' {
+        $ms = (Measure-Command { $script:c = Split-TestDoc ("# a" + (' ' * 40000) + ('#' * 200) + "x`n`nbody") }).TotalMilliseconds
+        $ms | Should BeLessThan 15000
+        $script:c[0].heading.Length | Should Not BeGreaterThan 120
+    }
+
+    It 'strips closing hashes and trailing spaces from heading labels' {
+        (Split-TestDoc "## Setup ##`n`nbody")[0].heading | Should Be 'Setup'
+        (Split-TestDoc "# C# notes`n`nbody")[0].heading | Should Be 'C# notes'
+        (Split-TestDoc ("# " + ('ab ' * 60) + "`n`nbody"))[0].heading | Should Not Match '\s$'
+    }
+
+    It 'starts the overlap on a whole row when the last table row is longer than the overlap window' {
+        $rows = 1..4 | ForEach-Object { "| cmd$_ | " + ((1..20 | ForEach-Object { "Does thing $_." }) -join ' ') + ' |' }
+        $source = New-Object 'System.Collections.Generic.HashSet[string]' -ArgumentList (,[string[]]$rows)
+        $text = ($rows -join "`n") + "`n`nShort note.`n`n" + ((1..45 | ForEach-Object { "Prose sentence $_ follows here." }) -join ' ')
+        foreach ($c in Split-TestDoc $text) { foreach ($l in ($c.text -split "`n" | Where-Object { $_.StartsWith('|') -or $_.EndsWith('|') })) { $source.Contains($l) | Should Be $true } }
+    }
+
+    It 'does not carry a closing fence marker into the next chunk' {
+        $fence = "``````powershell`n" + ((1..20 | ForEach-Object { "Get-Thing -Id $_" }) -join "`n") + "`n``````"
+        $chunks = Split-TestDoc ("$fence`n`nShort note.`n`n" + ((1..60 | ForEach-Object { "Prose sentence $_ here." }) -join ' '))
+        foreach ($c in ($chunks | Select-Object -Skip 1)) { $c.text | Should Not Match '^(Get-Thing|``````)' }
+    }
+
+    It 'keeps packed chunks within Size before overlap is added' {
+        $c = Split-TestDoc ((1..60 | ForEach-Object { "Para$_ sentence one here. Sentence two here." }) -join "`n`n") 300 60
+        $c[0].text.Length | Should Not BeGreaterThan 300
+        for ($i = 1; $i -lt $c.Count; $i++) {
+            $p = $c[$i - 1].text; $x = $c[$i].text; $k = [math]::Min($p.Length, $x.Length)
+            while ($k -gt 0 -and -not ($p.EndsWith($x.Substring(0, $k)) -and ($k -eq $x.Length -or $x.Substring($k).StartsWith("`n`n")))) { $k-- }
+            ($x.Length - $k) | Should Not BeGreaterThan 302
+        }
+    }
+
+    It 'merges a short intro with a following long paragraph instead of repeating it' {
+        $long = (1..80 | ForEach-Object { "Sentence $_ is ordinary." }) -join ' '
+        $c = Split-TestDoc "# H`n`nshort intro`n`n$long"
+        ([regex]::Matches((($c | ForEach-Object { $_.text }) -join '~'), 'short intro')).Count | Should Be 1
+        $c[0].text | Should Match '^# H\n\nshort intro\n\nSentence 1 is'
+    }
+
+    It 'does not repeat most of a small first chunk as overlap' {
+        $intro = (1..9 | ForEach-Object { "Intro sentence $_." }) -join ' '       # ~180 chars
+        $c = Split-TestDoc ("# A`n`n$intro`n`n" + ((1..70 | ForEach-Object { "Body sentence $_ here." }) -join ' '))
+        ([regex]::Matches((($c | ForEach-Object { $_.text }) -join '~'), 'Intro sentence 5\.')).Count | Should Be 1
+    }
+
+    It 'merges body-less headings longer than the overlap window with the next paragraph' {
+        $h = (1..10 | ForEach-Object { "## Heading number $_ here" }) -join "`n`n"
+        $c = Split-TestDoc ("$h`n`n" + ((1..30 | ForEach-Object { "Body sentence $_ ok." }) -join ' '))
+        $c.Count | Should Be 1
+        $c[0].heading | Should Be 'Heading number 10 here'
+    }
+
+    It 'labels chunks flushed from a heading run with their own last heading' {
+        $c = Split-TestDoc (((1..2000 | ForEach-Object { "# nav heading $_" }) -join "`n") + "`n`nquokka body")
+        foreach ($x in $c) { $m = [regex]::Matches($x.text, '(?m)^# (nav heading \d+)$'); if ($m.Count) { $x.heading | Should Be $m[$m.Count - 1].Groups[1].Value } }
+    }
+
+    It 'labels the chunks of a heading longer than Size with that heading' {
+        $c = Split-TestDoc ("# Prev`n`nprev body`n`n# " + ('longword ' * 300).Trim() + "`n`nbody")
+        foreach ($x in ($c | Select-Object -Skip 1)) { $x.heading | Should Not Be 'Prev' }
+    }
+
+    It 'keeps a tilde fence with blank lines in one chunk' {
+        $filler = (1..32 | ForEach-Object { "Filler sentence $_ goes here." }) -join ' '
+        $fence = "~~~text`n" + ((1..12 | ForEach-Object { "value line $_`n" }) -join "`n") + "~~~"
+        @(Split-TestDoc "# T`n`n$filler`n`n$fence`n`nafter" | Where-Object { $_.text.Contains($fence) }).Count | Should Be 1
+    }
+
+    It 'fails instead of hanging on Size 0' {
+        $j = Start-Job { param($p) Import-Module $p -DisableNameChecking; & (Get-Module rag) { @(Split-Doc 'doc.md' 'abc def' 0 0).Count } } -ArgumentList $rag.Path
+        $done = Wait-Job $j -Timeout 120
+        Stop-Job $j
+        $done | Should Not BeNullOrEmpty
+        (Receive-Job $j) | Should BeGreaterThan 0
+        Remove-Job $j -Force
+    }
+}
+
 Describe 'Search, prompt and tokens' {
     It 'returns chunks with id, file, heading and text' {
         (Split-TestDoc "# A`n`nx")[0].PSObject.Properties.Name -join ',' | Should Be 'id,file,heading,text'
@@ -345,5 +433,36 @@ Describe 'Search, prompt and tokens' {
 
     It 'drops stopwords and single characters from tokens' {
         (Get-Tokens 'The port is 8080 a x') -join ',' | Should Be 'port,8080'
+    }
+}
+
+Describe 'Add-Correction' {
+    It 'formats a heading block with the question, correct answer and wrong answer' {
+        $block = & $rag { param($q, $c, $w) Format-Correction $q $c $w } 'What port does the server use?' 'It is 9090.' 'It said 8080.'
+        $block | Should Match '^## What port does the server use\?'
+        $block | Should Match 'Correct answer: It is 9090\.'
+        $block | Should Match 'Previously answered \(wrong\): It said 8080\.'
+    }
+
+    It 'omits the wrong-answer line when none is given' {
+        (& $rag { param($q, $c) Format-Correction $q $c } 'q' 'a') | Should Not Match 'Previously answered'
+    }
+
+    It 'appends corrections instead of overwriting earlier ones' {
+        $root = "$TestDrive\corrections"; Use-TempRagRoot $root
+        Add-Correction -Question 'First question?' -Correct 'First answer.' | Out-Null
+        Add-Correction -Question 'Second question?' -Correct 'Second answer.' | Out-Null
+        $text = Get-Content "$root\docs\corrections.md" -Raw
+        $text | Should Match 'First question\?'
+        $text | Should Match 'Second question\?'
+    }
+
+    It 're-indexes so the correction is retrievable by its exact question' {
+        $root = "$TestDrive\correction-search"; Use-TempRagRoot $root
+        Set-Content "$root\docs\a.md" "# Unrelated`n`nSomething else entirely." -Encoding UTF8
+        Update-RagIndex 6>$null
+        $id = Add-Correction -Question 'How many cores does the laptop have?' -Correct 'It has 8 cores.' -Wrong 'It has 4 cores.'
+        $id | Should Not BeNullOrEmpty
+        (Search-Rag 'How many cores does the laptop have?' -MinRel 0)[0].Chunk.id | Should Be $id
     }
 }

@@ -23,6 +23,7 @@ Ub/Spec values are provisional until confirmed by the bench sweeps.
 | Terminal chat | `chat.ps1 [-Rag auto]` (commands `/think on\|off\|auto`, `/rag on\|off\|auto`, `/schema <file>\|off`, `/show`); `-Direct -Model 35b` without server |
 | Override the think router | Start the prompt with `/think` or `/nothink` |
 | Index documents for RAG | Put .md/.txt/code in `C:\llm\rag\docs`, run `rag-index.ps1`; inspect with `rag-index.ps1 -Query "..."`. Chunks follow headings and never split code fences or table rows; a chunker change (`$ChunkerVersion` in `rag.psm1`) re-chunks every file on the next run |
+| Record a correction | `correct.ps1 "question" "correct answer" [-Wrong "what it said"] [-NoEval]` — appends to `rag\docs\corrections.md` (an ordinary indexed doc, re-indexed immediately) and adds a regression check to `eval\evalset.jsonl`. In `chat.ps1`, `/correct <right answer>` does the same for the last question/answer |
 | Retrieval eval (no server) | `rag-eval.ps1 [-Baseline tests\fixtures\rag\baseline.json]` (fixture corpus in `tests\fixtures\rag`, results in `logs\rag-eval\`) |
 | Checks before a change is done | `check.ps1 -Stage fast\|task\|full` (rules in `CONSTRAINTS.md`; unit tests in `tests\`, run with `Invoke-Pester C:\llm\tests`) |
 | Resource usage | `status.ps1` |

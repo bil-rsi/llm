@@ -1,0 +1,173 @@
+﻿{
+    "summary":  [
+                    {
+                        "category":  "facts-local",
+                        "n":  5,
+                        "acc":  100,
+                        "med_ttft_s":  13.3,
+                        "med_wall_s":  15.7,
+                        "med_tps":  5.08
+                    },
+                    {
+                        "category":  "ALL",
+                        "n":  5,
+                        "acc":  100,
+                        "med_ttft_s":  13.3,
+                        "med_wall_s":  15.7,
+                        "med_tps":  5.08
+                    }
+                ],
+    "meta":  {
+                 "seed":  42,
+                 "think":  "auto",
+                 "server":  {
+                                "Budget":  512,
+                                "Alias":  "qwen3.6-35b-a3b",
+                                "Model":  "35b",
+                                "Draft":  "",
+                                "Ctx":  16384,
+                                "Profile":  "speed",
+                                "Reasoning":  "auto",
+                                "ThinkThreshold":  4,
+                                "Build":  "C:\\llm\\llama.cpp\\vulkan",
+                                "Spec":  "none",
+                                "Ub":  1024,
+                                "Port":  8080,
+                                "Ctv":  "f16",
+                                "RagK":  2,
+                                "Ctk":  "f16",
+                                "RagTokens":  800
+                            },
+                 "profile":  "speed",
+                 "tag":  "chunker-v2",
+                 "total_wall_s":  74.1,
+                 "model":  "35b",
+                 "reps":  1,
+                 "set":  "C:\\llm\\eval\\evalset.jsonl"
+             },
+    "results":  [
+                    {
+                        "id":  "rag-status",
+                        "category":  "facts-local",
+                        "rep":  1,
+                        "pass":  true,
+                        "error":  "",
+                        "think":  false,
+                        "think_score":  0,
+                        "should_think":  false,
+                        "json_valid":  false,
+                        "retries":  0,
+                        "prompt_tokens":  706,
+                        "prompt_ms":  13310.437,
+                        "gen_tokens":  7,
+                        "gen_tps":  5.081335239398641,
+                        "draft_n":  0,
+                        "draft_accepted":  0,
+                        "reasoning_chars":  0,
+                        "wall_ms":  15727,
+                        "sources":  [
+                                        "llm-setup.md#0",
+                                        "llm-setup.md#1"
+                                    ],
+                        "answer":  "status.ps1 [1]"
+                    },
+                    {
+                        "id":  "rag-port",
+                        "category":  "facts-local",
+                        "rep":  1,
+                        "pass":  true,
+                        "error":  "",
+                        "think":  false,
+                        "think_score":  0,
+                        "should_think":  false,
+                        "json_valid":  false,
+                        "retries":  0,
+                        "prompt_tokens":  495,
+                        "prompt_ms":  11351.274,
+                        "gen_tokens":  8,
+                        "gen_tps":  4.354254697774291,
+                        "draft_n":  0,
+                        "draft_accepted":  0,
+                        "reasoning_chars":  0,
+                        "wall_ms":  12986,
+                        "sources":  [
+                                        "llm-setup.md#0"
+                                    ],
+                        "answer":  "8080 [1]"
+                    },
+                    {
+                        "id":  "rag-alias",
+                        "category":  "facts-local",
+                        "rep":  1,
+                        "pass":  true,
+                        "error":  "",
+                        "think":  false,
+                        "think_score":  0,
+                        "should_think":  false,
+                        "json_valid":  false,
+                        "retries":  0,
+                        "prompt_tokens":  703,
+                        "prompt_ms":  13915.536,
+                        "gen_tokens":  16,
+                        "gen_tps":  5.159900145612382,
+                        "draft_n":  0,
+                        "draft_accepted":  0,
+                        "reasoning_chars":  0,
+                        "wall_ms":  16842,
+                        "sources":  [
+                                        "llm-setup.md#0",
+                                        "llm-setup.md#1"
+                                    ],
+                        "answer":  "qwen3.6-35b-a3b [1]"
+                    },
+                    {
+                        "id":  "rag-cpu",
+                        "category":  "facts-local",
+                        "rep":  1,
+                        "pass":  true,
+                        "error":  "",
+                        "think":  false,
+                        "think_score":  0,
+                        "should_think":  false,
+                        "json_valid":  false,
+                        "retries":  0,
+                        "prompt_tokens":  700,
+                        "prompt_ms":  14404.744,
+                        "gen_tokens":  14,
+                        "gen_tps":  5.456418952241644,
+                        "draft_n":  0,
+                        "draft_accepted":  0,
+                        "reasoning_chars":  0,
+                        "wall_ms":  16803,
+                        "sources":  [
+                                        "llm-setup.md#0",
+                                        "llm-setup.md#1"
+                                    ],
+                        "answer":  "Intel Core i7-1355U [2]"
+                    },
+                    {
+                        "id":  "rag-unknown",
+                        "category":  "facts-local",
+                        "rep":  1,
+                        "pass":  true,
+                        "error":  "",
+                        "think":  false,
+                        "think_score":  -3,
+                        "should_think":  false,
+                        "json_valid":  false,
+                        "retries":  0,
+                        "prompt_tokens":  4,
+                        "prompt_ms":  1205.295,
+                        "gen_tokens":  49,
+                        "gen_tps":  5.000840766353843,
+                        "draft_n":  0,
+                        "draft_accepted":  0,
+                        "reasoning_chars":  0,
+                        "wall_ms":  11745,
+                        "sources":  [
+
+                                    ],
+                        "answer":  "Not in my documents\n\nGeneral knowledge: For security reasons, office Wi-Fi passwords are typically managed by IT departments and are not publicly disclosed. You should contact your organization\u0027s IT support team or check internal employee handbooks for the correct credentials."
+                    }
+                ]
+}

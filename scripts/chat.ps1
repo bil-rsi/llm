@@ -3,6 +3,7 @@
 #  - Otherwise: -Direct loads the model in llama-cli (uses the model's own RAM).
 # Usage: powershell -ExecutionPolicy Bypass -File C:\llm\scripts\chat.ps1 [-Rag off|on|auto] [-Direct -Model 27b|35b]
 # Commands: /exit  /reset  /think on|off|auto  /rag on|off|auto  /schema <file>|off  /show (toggle thinking display)
+#           /correct <right answer>  (records the last Q&A as a correction, re-indexed for RAG immediately)
 #           Prefix a message with /think or /nothink to override the router for that message.
 param([switch]$Direct, [ValidateSet('27b','35b')][string]$Model = '35b', [ValidateSet('off','on','auto')][string]$Rag = 'off')
 $models = @{ '27b' = 'Qwen3.6-27B-Q4_K_M.gguf'; '35b' = 'Qwen3.6-35B-A3B-UD-Q4_K_M.gguf' }
@@ -16,7 +17,7 @@ $prof = Get-ServerProfile
 if (-not (Test-Server $prof.Port)) { Write-Host "Server not running. Start it with start.ps1, or use -Direct."; return }
 $history = New-Object System.Collections.ArrayList
 $thinkMode = 'auto'; $schema = ''; $show = $false
-Write-Host "Chatting with $($prof.Alias) [profile $($prof.Profile)] (/exit, /reset, /think on|off|auto, /rag on|off|auto, /schema file|off, /show)"
+Write-Host "Chatting with $($prof.Alias) [profile $($prof.Profile)] (/exit, /reset, /think on|off|auto, /rag on|off|auto, /schema file|off, /show, /correct <answer>)"
 while ($true) {
     $q = Read-Host "`nyou"
     if ($q -eq '/exit') { break }
@@ -25,6 +26,13 @@ while ($true) {
     if ($q -match '^/think\s+(on|off|auto)$') { $thinkMode = $Matches[1]; Write-Host "think: $thinkMode"; continue }
     if ($q -match '^/rag\s+(on|off|auto)$') { $Rag = $Matches[1]; Write-Host "rag: $Rag"; continue }
     if ($q -match '^/schema\s+(.+)$') { $schema = if ($Matches[1] -eq 'off') { '' } else { $Matches[1] }; Write-Host "schema: $schema"; continue }
+    if ($q -match '^/correct\s+(.+)$') {
+        if ($history.Count -lt 2) { Write-Host "Nothing to correct yet."; continue }
+        Import-Module "$PSScriptRoot\rag.psm1" -DisableNameChecking -Force
+        $id = Add-Correction -Question $history[-2].content -Correct $Matches[1] -Wrong $history[-1].content
+        Write-Host "Saved correction ($id)."
+        continue
+    }
 
     try { $r = Invoke-Ask -Prompt $q -ThinkMode $thinkMode -RagMode $Rag -SchemaFile $schema -History $history -ServerProfile $prof }
     catch { Write-Host "Request failed: $($_.Exception.Message)" -ForegroundColor Red; continue }

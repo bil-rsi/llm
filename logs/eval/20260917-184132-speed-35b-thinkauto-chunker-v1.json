@@ -1,0 +1,173 @@
+﻿{
+    "summary":  [
+                    {
+                        "category":  "facts-local",
+                        "n":  5,
+                        "acc":  100,
+                        "med_ttft_s":  14.9,
+                        "med_wall_s":  19.4,
+                        "med_tps":  5.61
+                    },
+                    {
+                        "category":  "ALL",
+                        "n":  5,
+                        "acc":  100,
+                        "med_ttft_s":  14.9,
+                        "med_wall_s":  19.4,
+                        "med_tps":  5.61
+                    }
+                ],
+    "meta":  {
+                 "seed":  42,
+                 "think":  "auto",
+                 "server":  {
+                                "Budget":  512,
+                                "Alias":  "qwen3.6-35b-a3b",
+                                "Model":  "35b",
+                                "Draft":  "",
+                                "Ctx":  16384,
+                                "Profile":  "speed",
+                                "Reasoning":  "auto",
+                                "ThinkThreshold":  4,
+                                "Build":  "C:\\llm\\llama.cpp\\vulkan",
+                                "Spec":  "none",
+                                "Ub":  1024,
+                                "Port":  8080,
+                                "Ctv":  "f16",
+                                "RagK":  2,
+                                "Ctk":  "f16",
+                                "RagTokens":  800
+                            },
+                 "profile":  "speed",
+                 "tag":  "chunker-v1",
+                 "total_wall_s":  104.1,
+                 "model":  "35b",
+                 "reps":  1,
+                 "set":  "C:\\llm\\eval\\evalset.jsonl"
+             },
+    "results":  [
+                    {
+                        "id":  "rag-status",
+                        "category":  "facts-local",
+                        "rep":  1,
+                        "pass":  true,
+                        "error":  "",
+                        "think":  false,
+                        "think_score":  0,
+                        "should_think":  false,
+                        "json_valid":  false,
+                        "retries":  0,
+                        "prompt_tokens":  822,
+                        "prompt_ms":  14916.915,
+                        "gen_tokens":  57,
+                        "gen_tps":  4.439848848517273,
+                        "draft_n":  0,
+                        "draft_accepted":  0,
+                        "reasoning_chars":  0,
+                        "wall_ms":  35002,
+                        "sources":  [
+                                        "llm-setup.md#1",
+                                        "llm-setup.md#0"
+                                    ],
+                        "answer":  "Not in my documents\n\nBased on general knowledge of the setup described in the sources, the script `status.ps1` is likely used to show resource usage, which typically includes memory usage, but the provided text does not explicitly confirm that it displays iGPU shared memory usage specifically."
+                    },
+                    {
+                        "id":  "rag-port",
+                        "category":  "facts-local",
+                        "rep":  1,
+                        "pass":  true,
+                        "error":  "",
+                        "think":  false,
+                        "think_score":  0,
+                        "should_think":  false,
+                        "json_valid":  false,
+                        "retries":  0,
+                        "prompt_tokens":  495,
+                        "prompt_ms":  10799.58,
+                        "gen_tokens":  8,
+                        "gen_tps":  5.0833266160803054,
+                        "draft_n":  0,
+                        "draft_accepted":  0,
+                        "reasoning_chars":  0,
+                        "wall_ms":  13224,
+                        "sources":  [
+                                        "llm-setup.md#0"
+                                    ],
+                        "answer":  "8080 [1]"
+                    },
+                    {
+                        "id":  "rag-alias",
+                        "category":  "facts-local",
+                        "rep":  1,
+                        "pass":  true,
+                        "error":  "",
+                        "think":  false,
+                        "think_score":  0,
+                        "should_think":  false,
+                        "json_valid":  false,
+                        "retries":  0,
+                        "prompt_tokens":  819,
+                        "prompt_ms":  15529.367,
+                        "gen_tokens":  27,
+                        "gen_tps":  5.832202596362007,
+                        "draft_n":  0,
+                        "draft_accepted":  0,
+                        "reasoning_chars":  0,
+                        "wall_ms":  20950,
+                        "sources":  [
+                                        "llm-setup.md#1",
+                                        "llm-setup.md#0"
+                                    ],
+                        "answer":  "The model id for the MoE model is `qwen3.6-35b-a3b` [1]."
+                    },
+                    {
+                        "id":  "rag-cpu",
+                        "category":  "facts-local",
+                        "rep":  1,
+                        "pass":  true,
+                        "error":  "",
+                        "think":  false,
+                        "think_score":  0,
+                        "should_think":  false,
+                        "json_valid":  false,
+                        "retries":  0,
+                        "prompt_tokens":  816,
+                        "prompt_ms":  15718.152,
+                        "gen_tokens":  22,
+                        "gen_tps":  5.708488685775425,
+                        "draft_n":  0,
+                        "draft_accepted":  0,
+                        "reasoning_chars":  0,
+                        "wall_ms":  19414,
+                        "sources":  [
+                                        "llm-setup.md#1",
+                                        "llm-setup.md#0"
+                                    ],
+                        "answer":  "The local LLM laptop has an Intel Core i7-1355U CPU [1]."
+                    },
+                    {
+                        "id":  "rag-unknown",
+                        "category":  "facts-local",
+                        "rep":  1,
+                        "pass":  true,
+                        "error":  "",
+                        "think":  false,
+                        "think_score":  -3,
+                        "should_think":  false,
+                        "json_valid":  false,
+                        "retries":  0,
+                        "prompt_tokens":  83,
+                        "prompt_ms":  5947.391,
+                        "gen_tokens":  49,
+                        "gen_tps":  5.60671029777472,
+                        "draft_n":  0,
+                        "draft_accepted":  0,
+                        "reasoning_chars":  0,
+                        "wall_ms":  15484,
+                        "sources":  [
+
+                                    ],
+                        "answer":  "Not in my documents\n\nGeneral knowledge: For security reasons, office Wi-Fi passwords are typically managed by IT departments and are not publicly disclosed. You should contact your organization\u0027s IT support team or check internal employee handbooks for the correct credentials."
+                    }
+                ]
+}
