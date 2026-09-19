@@ -25,7 +25,8 @@ $models = @{
     '27b' = @{ File = 'Qwen3.6-27B-Q4_K_M.gguf';        Alias = 'qwen3.6-27b' }
     '35b' = @{ File = 'Qwen3.6-35B-A3B-UD-Q4_K_M.gguf'; Alias = 'qwen3.6-35b-a3b' }
 }
-# Ub/Threads/Spec are provisional until the bench sweeps in logs\bench\ confirm them.
+# Ub/Threads/Spec are provisional until the bench sweeps in logs\bench\ confirm them. Optional keys once measured:
+# Backend = 'cpu' (e.g. deep, if 27B generation is faster on CPU), Draft = '<gguf>' + DraftMax = N (speculative decoding).
 # Client-side keys (ThinkThreshold, RagK, RagTokens) are read by lib.ps1 via logs\server.profile.json.
 $profiles = @{
     speed    = @{ Model = '35b'; Ctx = 16384; Ub = 1024; Batch = 2048; Ctk = 'f16';  Ctv = 'f16';  Spec = 'none'; Budget = 512
@@ -37,7 +38,8 @@ $profiles = @{
 }
 $p = $profiles[$Profile]
 if (-not $Model)   { $Model = $p.Model }
-if (-not $Backend) { $Backend = 'vulkan' }
+if (-not $Backend) { $Backend = if ($p.Backend) { $p.Backend } else { 'vulkan' } }
+if (-not $Draft -and $p.Draft) { $Draft = $p.Draft; if ($p.DraftMax) { $DraftMax = $p.DraftMax } }
 if ($Threads -le 0) { $Threads = 6 }
 if ($Ngl -lt 0)    { $Ngl = if ($Backend -eq 'cpu') { 0 } else { 99 } }
 if ($Ctx -le 0)    { $Ctx = $p.Ctx }
@@ -61,6 +63,9 @@ if (Test-Path $pidFile) {
 foreach ($f in @($modelPath, "$BuildDir\llama-server.exe") + @($Draft | Where-Object { $_ })) {
     if (-not (Test-Path $f)) { throw "Not found: $f" }
 }
+. "$PSScriptRoot\lib.ps1"
+foreach ($f in @($modelPath) + @($Draft | Where-Object { $_ })) { $bad = Test-ModelFile $f; if ($bad) { throw $bad } }
+$build = [string]((& { $ErrorActionPreference = 'Continue'; & "$BuildDir\llama-server.exe" --version 2>&1 | ForEach-Object { "$_" } }) -match 'version:' | Select-Object -First 1) -replace '^.*version:\s*', ''
 
 # Server-level sampling is the Qwen non-thinking set; clients send the thinking set per request.
 if ($Reasoning -eq 'on') { $sampling = @('--temp', '1.0', '--top-p', '0.95', '--top-k', '20', '--min-p', '0') }
@@ -81,7 +86,7 @@ $proc = Start-Process -FilePath "$BuildDir\llama-server.exe" -ArgumentList $cliA
     -RedirectStandardError $log -RedirectStandardOutput "$root\logs\server-$Profile-$Model.out.log"
 $proc.Id | Set-Content $pidFile
 @{ Profile = $Profile; Model = $Model; Alias = $m.Alias; Port = $Port; Reasoning = $Reasoning; Budget = $ReasoningBudget
-   Ctx = $Ctx; Ub = $Ub; Ctk = $Ctk; Ctv = $Ctv; Spec = $Spec; Draft = $Draft; Build = $BuildDir
+   Ctx = $Ctx; Ub = $Ub; Ctk = $Ctk; Ctv = $Ctv; Spec = $Spec; Draft = $Draft; Build = $BuildDir; LlamaBuild = $build.Trim()
    ThinkThreshold = $p.ThinkThreshold; RagK = $p.RagK; RagTokens = $p.RagTokens } |
     ConvertTo-Json | Set-Content "$root\logs\server.profile.json" -Encoding UTF8
 Write-Host ("Starting {0} [profile={1}, {2}, t={3}, ngl={4}, ctx={5}, ub={6}, kv={7}/{8}, spec={9}, reasoning={10}, budget={11}] PID {12}" -f `

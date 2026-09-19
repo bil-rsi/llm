@@ -9,6 +9,45 @@ function Get-ServerProfile {
     [pscustomobject]@{ Profile = 'unknown'; Model = ''; Alias = ''; Port = 8080; ThinkThreshold = 3; RagK = 3; RagTokens = 1200 }
 }
 
+# Returns an error message when a model file's size differs from models\expected-sha256.txt ("<name> <bytes> <sha256>"), else $null.
+# Size only (milliseconds); a truncated download is the failure this catches. Unlisted models pass.
+function Test-ModelFile([string]$Path, [string]$ExpectedFile = "$LlmRoot\models\expected-sha256.txt") {
+    if (-not (Test-Path -LiteralPath $Path)) { return "Not found: $Path" }
+    if (-not (Test-Path -LiteralPath $ExpectedFile)) { return $null }
+    $name = Split-Path $Path -Leaf; $row = Get-Content $ExpectedFile | Where-Object { ($_ -split '\s+')[0] -eq $name } | Select-Object -First 1
+    if (-not $row) { return $null }
+    $want = [long](($row -split '\s+')[1]); $have = (Get-Item -LiteralPath $Path).Length
+    if ($have -ne $want) { return "$name is $have bytes, expected $want (truncated or wrong file). Re-download it and check Get-FileHash against $ExpectedFile." }
+    $null
+}
+
+# Exact two-sided sign test for paired outcomes: A-only wins vs B-only wins (ties dropped). Returns the p-value.
+function Get-SignTestP([int]$AWins, [int]$BWins) {
+    $n = $AWins + $BWins; if ($n -eq 0) { return 1.0 }
+    $k = [math]::Min($AWins, $BWins); $c = 1.0; $sum = 0.0
+    for ($i = 0; $i -le $k; $i++) { if ($i -gt 0) { $c = $c * ($n - $i + 1) / $i }; $sum += $c }
+    [math]::Min(1.0, 2 * $sum / [math]::Pow(2, $n))
+}
+
+# Should a non-thinking answer be re-asked with thinking? Only on visible failures: schema still invalid after the retry,
+# or the prompt demands an 'Answer: ...' line that the reply does not contain.
+function Test-Escalate([string]$Prompt, [string]$Content, [bool]$SchemaFailed) {
+    if ($SchemaFailed) { return $true }
+    ($Prompt -match "(?i)end with\s+'?answer\s*:") -and ($Content -notmatch '(?i)answer\s*(is)?\s*[:\uFF1A]')
+}
+
+# Long-context probe for KV-cache settings: ~PadTokens (4 chars/token) of repo docs as filler, with the Needle paragraph
+# placed at fraction At (0 = start, 1 = end). Deterministic for the same sources, so runs are comparable.
+function Format-LongContextPrompt([string]$Needle, [string]$Question, [int]$PadTokens, [double]$At = 0.5,
+                               [string[]]$Sources = @("$LlmRoot\SPEC.md", "$LlmRoot\CONSTRAINTS.md", "$LlmRoot\tasks\plan.md", "$LlmRoot\README.md")) {
+    $paras = @($Sources | Where-Object { Test-Path $_ } | ForEach-Object { (Get-Content $_ -Raw -Encoding UTF8) -split '(\r?\n){2,}' } | Where-Object { $_.Trim() } | ForEach-Object { $_.Trim() })
+    if (-not $paras.Count) { throw 'No filler sources found' }
+    $fill = New-Object System.Collections.ArrayList; $len = 0; $i = 0
+    while ($len -lt $PadTokens * 4) { $t = $paras[$i % $paras.Count]; [void]$fill.Add($t); $len += $t.Length + 2; $i++ }
+    $fill.Insert([int][math]::Round([math]::Max(0.0, [math]::Min(1.0, $At)) * $fill.Count), $Needle)
+    "Read the notes below, then answer the question.`n`n<notes>`n$($fill -join "`n`n")`n</notes>`n`nQuestion: $Question"
+}
+
 function Test-Server([int]$Port = 8080) {
     try { return (Invoke-RestMethod "http://127.0.0.1:$Port/health" -TimeoutSec 2).status -eq 'ok' } catch { return $false }
 }
@@ -124,7 +163,16 @@ function Invoke-Ask {
         }
     }
     $sum = { param($name) ($responses | ForEach-Object { [double]$_.timings.$name } | Measure-Object -Sum).Sum }
-    [pscustomobject]@{
+    # Router said no thinking but the answer visibly failed: re-ask once with thinking (never when /nothink or -ThinkMode off).
+    if (-not $d.Think -and $ThinkMode -eq 'auto' -and $d.Reasons -notcontains 'forced' -and (Test-Escalate $question $answer ([bool]$SchemaFile -and -not $parsed))) {
+        $e = Invoke-Ask -Prompt $question -ThinkMode on -RagMode $RagMode -RagAutoMin $RagAutoMin -SchemaFile $SchemaFile -GrammarFile $GrammarFile `
+            -History $History -Seed $Seed -MaxTokens $MaxTokens -ServerProfile $ServerProfile
+        $map = @{ PromptTokens = 'prompt_n'; PromptMs = 'prompt_ms'; GenTokens = 'predicted_n'; DraftN = 'draft_n'; DraftAccepted = 'draft_n_accepted' }
+        foreach ($k in $map.Keys) { $e.$k += & $sum $map[$k] }
+        $e.Calls += $responses.Count; $e.WallMs = $sw.ElapsedMilliseconds; $e.Escalated = $true; $e.ThinkScore = $d.Score; $e.ThinkReasons = @($d.Reasons) + 'escalated'
+        return $e
+    }
+    [pscustomobject]@{ Escalated = $false
         Content = $answer; Reasoning = $reasoning; Think = $d.Think; ThinkScore = $d.Score; ThinkReasons = $d.Reasons
         Sources = @($hits | ForEach-Object { $_.Chunk.id }); Json = $parsed; JsonValid = [bool]$parsed; Retries = $retries
         PromptTokens = & $sum 'prompt_n'; PromptMs = & $sum 'prompt_ms'; GenTokens = & $sum 'predicted_n'

@@ -3,21 +3,42 @@
 #   eval.ps1 [-Think auto|on|off] [-Reps 2] [-Category math] [-Limit 5] [-Tag note]   -> logs\eval\<stamp>-<profile>-<tag>.json
 #   eval.ps1 -RouterOnly                     check think-router decisions against should_think (no generation)
 #   eval.ps1 -Compare a.json b.json          per-category accuracy and median-latency diff
-# Item format (eval\evalset.jsonl): {id, category, prompt, check, expected, schema?, rag?, should_think?}
+#   eval.ps1 -Set C:\llm\eval\speedset.jsonl -Reps 2 -Tag <config>   throughput set (med_tps, draft_acc) for -Spec/-Draft/-Ub decisions
+#   eval.ps1 -Set C:\llm\eval\longctx.jsonl -Tag <kv-type>            needle at 3K-12K tokens, for -Ctk/-Ctv decisions
+# Item format (eval\evalset.jsonl): {id, category, prompt, check, expected, schema?, rag?, should_think?, pad?, at?, needle?}
+#   pad/at/needle: prompt is wrapped in ~pad tokens of filler with the needle at fraction 'at' (Format-LongContextPrompt)
 #   check: number | choice | keywords | unknown | json | regex
+[CmdletBinding(PositionalBinding = $false)]
 param([ValidateSet('auto', 'on', 'off')][string]$Think = 'auto', [int]$Reps = 1, [string]$Category = '', [int]$Limit = 0,
       [string]$Tag = '', [int]$Seed = 42, [string]$Set = 'C:\llm\eval\evalset.jsonl',
-      [switch]$RouterOnly, [string[]]$Compare = @())
+      [switch]$RouterOnly, [string[]]$Compare = @(), [Parameter(ValueFromRemainingArguments = $true)][string[]]$Rest = @())
+# -Compare a b (space) and -Compare a,b both work, also under powershell -File where a comma list arrives as one string.
+$Compare = @(@($Compare) + @($Rest) | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
 . "$PSScriptRoot\lib.ps1"
 
 function Get-Median([double[]]$v) { if (-not $v.Count) { return 0 }; $s = $v | Sort-Object; $n = $s.Count; if ($n % 2) { $s[[int][math]::Floor($n / 2)] } else { ($s[$n / 2 - 1] + $s[$n / 2]) / 2 } }
 
 function Get-Summary($results) {
     foreach ($g in ($results | Group-Object category | Sort-Object Name)) {
+        $dn = ($g.Group | Measure-Object draft_n -Sum).Sum
         [pscustomobject]@{ category = $g.Name; n = $g.Count; acc = [math]::Round(100 * @($g.Group | Where-Object pass).Count / $g.Count, 1)
             med_ttft_s = [math]::Round((Get-Median @($g.Group | ForEach-Object { $_.prompt_ms / 1000 })), 1)
             med_wall_s = [math]::Round((Get-Median @($g.Group | ForEach-Object { $_.wall_ms / 1000 })), 1)
-            med_tps = [math]::Round((Get-Median @($g.Group | ForEach-Object { $_.gen_tps })), 2) }
+            med_tps = [math]::Round((Get-Median @($g.Group | ForEach-Object { $_.gen_tps })), 2)
+            draft_acc = $(if ($dn) { [math]::Round(($g.Group | Measure-Object draft_accepted -Sum).Sum / $dn, 2) } else { $null })
+            json_ok = $(if ($g.Name -match 'json') { [math]::Round(100 * @($g.Group | Where-Object json_valid).Count / $g.Count, 1) } else { $null })
+            escalated = @($g.Group | Where-Object escalated).Count }
+    }
+}
+
+# Pairs two runs by id+rep; per category: B-only passes, A-only passes and the exact sign-test p-value.
+function Get-PairedDiff($A, $B) {
+    $ia = @{}; foreach ($x in $A.results) { $ia["$($x.id)|$($x.rep)"] = $x }
+    $pairs = @(foreach ($y in $B.results) { $x = $ia["$($y.id)|$($y.rep)"]; if ($x) { [pscustomobject]@{ category = $y.category; a = [bool]$x.pass; b = [bool]$y.pass } } })
+    $groups = @($pairs | Group-Object category | Sort-Object Name | ForEach-Object { [pscustomobject]@{ Name = $_.Name; Group = $_.Group } }) + @([pscustomobject]@{ Name = 'ALL'; Group = $pairs })
+    foreach ($g in $groups) {
+        $bw = @($g.Group | Where-Object { $_.b -and -not $_.a }).Count; $aw = @($g.Group | Where-Object { $_.a -and -not $_.b }).Count; $pv = Get-SignTestP $aw $bw
+        [pscustomobject]@{ category = $g.Name; pairs = @($g.Group).Count; b_only = $bw; a_only = $aw; p = [math]::Round($pv, 3); verdict = $(if ($pv -gt 0.1) { 'no evidence' } elseif ($bw -gt $aw) { 'B better' } else { 'A better' }) }
     }
 }
 
@@ -27,6 +48,8 @@ if ($Compare.Count -eq 2) {
     $sa = @{}; foreach ($s in $a.summary) { $sa[$s.category] = $s }
     $b.summary | ForEach-Object { $x = $sa[$_.category]; [pscustomobject]@{ category = $_.category; acc_A = $x.acc; acc_B = $_.acc
         d_acc = $_.acc - $x.acc; wall_A = $x.med_wall_s; wall_B = $_.med_wall_s; tps_A = $x.med_tps; tps_B = $_.med_tps } } | Format-Table -AutoSize
+    Write-Host 'Paired by id+rep (sign test; p > 0.1 = difference is within noise):'
+    Get-PairedDiff $a $b | Format-Table -AutoSize
     return
 }
 
@@ -71,12 +94,13 @@ for ($rep = 1; $rep -le $Reps; $rep++) {
         $schema = if ($it.schema) { Join-Path 'C:\llm' $it.schema } else { '' }
         $rag = if ($it.rag) { 'on' } else { 'off' }
         try {
-            $r = Invoke-Ask -Prompt $it.prompt -ThinkMode $Think -RagMode $rag -SchemaFile $schema -Seed ($Seed + $rep - 1) -ServerProfile $prof
+            $prompt = if ($it.pad) { Format-LongContextPrompt $it.needle $it.prompt ([int]$it.pad) ([double]$it.at) } else { $it.prompt }
+            $r = Invoke-Ask -Prompt $prompt -ThinkMode $Think -RagMode $rag -SchemaFile $schema -Seed ($Seed + $rep - 1) -ServerProfile $prof
             $pass = [bool](Test-Item $it $r); $err = ''
         } catch { $r = $null; $pass = $false; $err = $_.Exception.Message }
         Write-Host $(if ($pass) { ' PASS' } else { " FAIL $err" }) -ForegroundColor $(if ($pass) { 'Green' } else { 'Red' })
         [void]$results.Add([pscustomobject]@{ id = $it.id; category = $it.category; rep = $rep; pass = $pass; error = $err
-            think = $r.Think; think_score = $r.ThinkScore; should_think = [bool]$it.should_think; json_valid = $r.JsonValid; retries = $r.Retries
+            think = $r.Think; think_score = $r.ThinkScore; should_think = [bool]$it.should_think; json_valid = $r.JsonValid; retries = $r.Retries; escalated = [bool]$r.Escalated
             prompt_tokens = $r.PromptTokens; prompt_ms = $r.PromptMs; gen_tokens = $r.GenTokens; gen_tps = $r.GenTps
             draft_n = $r.DraftN; draft_accepted = $r.DraftAccepted; reasoning_chars = ([string]$r.Reasoning).Length; wall_ms = $r.WallMs
             sources = $r.Sources; answer = $r.Content })
