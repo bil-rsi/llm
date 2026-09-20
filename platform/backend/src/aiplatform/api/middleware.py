@@ -23,7 +23,8 @@ CSP = (
 SECURITY_HEADERS = [
     (b"x-content-type-options", b"nosniff"),
     (b"x-frame-options", b"DENY"),
-    (b"referrer-policy", b"no-referrer"),
+    # not no-referrer: browsers then send "Origin: null" on form POSTs and the origin allowlist rejects the login
+    (b"referrer-policy", b"same-origin"),
     (b"cross-origin-opener-policy", b"same-origin"),
     (b"cross-origin-resource-policy", b"same-origin"),
     (b"permissions-policy", b"camera=(), microphone=(), geolocation=(), usb=()"),

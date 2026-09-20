@@ -40,7 +40,9 @@ class UiProxy:
 
     async def get(self, path: str, request: Request) -> Response:
         hdrs = {"Accept": request.headers.get("accept", "*/*") or "*/*", "Accept-Encoding": "gzip"}
-        if inm := request.headers.get("if-none-match"):
+        # never revalidate the shell: a 304 has no body to hash, so it would carry the hash-less default CSP and the browser
+        # would apply it to the cached HTML, blocking the UI's inline bootstrap script
+        if (inm := request.headers.get("if-none-match")) and path != "/":
             hdrs["If-None-Match"] = inm
         try:
             r = await self.http.get(path, headers=hdrs)

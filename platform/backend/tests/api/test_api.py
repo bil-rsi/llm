@@ -179,6 +179,7 @@ async def test_admin_console_escapes_memory_xss(h: Harness) -> None:
     assert page.status_code == 200
     assert "<script>alert(1)</script>" not in page.text and "&lt;script&gt;" in page.text
     assert "script-src 'self'" in page.headers["content-security-policy"]
+    assert page.headers["referrer-policy"] == "same-origin"  # no-referrer makes browsers send "Origin: null" on form POSTs → login 403
 
 
 # ───────────────────────────── memory through chat ─────────────────────────────

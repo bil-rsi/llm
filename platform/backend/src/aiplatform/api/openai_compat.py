@@ -4,9 +4,10 @@ transparently; tool/memory status is streamed as `reasoning_content` (shown in t
 
 from __future__ import annotations
 
+import asyncio
 import json
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from typing import Any, Literal
 from uuid import UUID
 
@@ -37,6 +38,33 @@ class ChatCompletionIn(BaseModel):
     chat_template_kwargs: dict[str, Any] | None = None
     think: bool | None = None
     reasoning_effort: Literal["low", "medium", "high", "none"] | None = None
+
+
+KEEPALIVE = b": keep-alive\n\n"
+# The stock web UI cancels a stream that has been byte-silent for 3 s (`wTt`) when its tab regains focus, then fails to resume it.
+# A CPU model is silent that long while loading, prefilling or waiting on a tool. SSE comment lines are ignored by clients.
+KEEPALIVE_S = 1.0
+
+
+async def with_keepalive(src: AsyncGenerator[bytes], every: float) -> AsyncGenerator[bytes]:
+    """Pass `src` through, emitting an SSE comment whenever it has been quiet for `every` seconds."""
+    nxt = asyncio.ensure_future(anext(src))
+    try:
+        while True:
+            done, _ = await asyncio.wait({nxt}, timeout=every)
+            if not done:
+                yield KEEPALIVE
+                continue
+            try:
+                item = nxt.result()
+            except StopAsyncIteration:
+                return
+            yield item
+            nxt = asyncio.ensure_future(anext(src))
+    finally:
+        nxt.cancel()
+        await asyncio.gather(nxt, return_exceptions=True)  # `src` can't be closed while a step of it is still running
+        await src.aclose()
 
 
 def _think(body: ChatCompletionIn) -> bool | None:
@@ -133,7 +161,7 @@ async def chat_completions(body: ChatCompletionIn, request: Request, p: Principa
             "aip": {k: done.get(k) for k in ("conversation_id", "stages", "context", "memories")},
         }
 
-    async def sse() -> AsyncIterator[bytes]:
+    async def sse() -> AsyncGenerator[bytes]:
         yield _chunk(cid, model, {"role": "assistant", "content": ""})
         ev: StreamEvent
         async for ev in events:
@@ -175,7 +203,9 @@ async def chat_completions(body: ChatCompletionIn, request: Request, p: Principa
         yield b"data: [DONE]\n\n"
 
     return StreamingResponse(
-        sse(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+        with_keepalive(sse(), KEEPALIVE_S),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 
