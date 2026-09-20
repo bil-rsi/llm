@@ -1,0 +1,8 @@
+{% extends "base.html" %}{% block title %}Chats{% endblock %}
+{% block body %}
+<h1>Conversation history</h1>
+<form method="get" class="row"><input name="q" value="{{ q }}" placeholder="title contains…"><button>Search</button></form>
+<table><tr><th>Title</th><th>Client</th><th>Messages</th><th>Tokens</th><th>Summary</th><th>Updated</th></tr>
+{% for c in items %}<tr><td><a href="/admin/conversations/{{ c.id }}">{{ c.title or '(untitled)' }}</a></td><td>{{ c.client }}</td><td>{{ c.message_count }}</td><td>{{ c.token_count }}</td><td>{{ 'yes' if c.has_summary else '' }}</td><td class="nowrap">{{ c.updated_at.strftime('%Y-%m-%d %H:%M') }}</td></tr>
+{% else %}<tr><td colspan="6" class="muted">no conversations yet</td></tr>{% endfor %}</table>
+{% endblock %}

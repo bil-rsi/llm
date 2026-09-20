@@ -1,0 +1,19 @@
+{% extends "base.html" %}{% block title %}Tool log{% endblock %}
+{% block body %}
+<h1>Tool executions</h1>
+<form method="get" class="row"><select name="status"><option value="">any status</option>{% for s in ['succeeded','failed','denied','awaiting_approval','expired','timed_out','running'] %}<option {{ 'selected' if s == status }}>{{ s }}</option>{% endfor %}</select><button>Filter</button></form>
+<table>
+<tr><th>When</th><th>Tool</th><th>Status</th><th>Decision</th><th>Mode</th><th>Details</th><th>ms</th></tr>
+{% for r in rows %}
+<tr class="st-{{ r.status }}">
+  <td class="nowrap">{{ r.requested_at.strftime('%m-%d %H:%M:%S') }}</td><td>{{ r.tool_name }}</td><td>{{ r.status }}{% if r.dry_run %} (dry run){% endif %}</td>
+  <td class="small">{{ r.decision }} · {{ r.policy_rule }}{% if r.tainted %} <span class="tag warn">tainted</span>{% endif %}</td><td>{{ r.mode }}</td>
+  <td class="small"><details><summary>{{ r.result_summary or r.error or r.decision_reason or '' }}</summary>
+    {% if r.path %}<div>{{ r.operation }} <code>{{ r.path }}</code>{% if r.backup_path %} · backup <code>{{ r.backup_path }}</code>{% endif %}</div>{% endif %}
+    {% if r.url_redacted %}<div>{{ r.method }} <code>{{ r.url_redacted }}</code> → {{ r.status_code }}</div>{% endif %}
+    <pre class="args">{{ r.arguments|tojson_pretty }}</pre></details></td>
+  <td>{{ '%.0f'|format(r.duration_ms) if r.duration_ms is not none else '' }}</td>
+</tr>
+{% else %}<tr><td colspan="7" class="muted">no tool calls yet</td></tr>{% endfor %}
+</table>
+{% endblock %}

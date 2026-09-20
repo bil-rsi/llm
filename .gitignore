@@ -18,6 +18,22 @@
 # Claude Code worktrees live inside the repo root
 /.claude/worktrees/
 
+# Platform: generated secrets, backups, runtime state
+platform/.env
+platform/secrets/*
+!platform/secrets/README.md
+platform/backups/*
+!platform/backups/.gitkeep
+platform/config/runtime/
+platform/compose.mounts.yaml
+platform/bench/results/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+
 # Editor / OS noise
 .vscode/
 *.swp

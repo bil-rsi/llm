@@ -1,0 +1,17 @@
+{% extends "base.html" %}{% block title %}Audit{% endblock %}
+{% block body %}
+<h1>Audit trail</h1>
+<form method="get" class="row">
+  <input name="action" value="{{ action }}" placeholder="action prefix, e.g. tool. / permissions. / memory.">
+  <select name="outcome"><option value="">any outcome</option>{% for o in ['success','failure','denied','pending','info'] %}<option {{ 'selected' if o == outcome }}>{{ o }}</option>{% endfor %}</select>
+  <button>Filter</button>
+  <button name="verify" value="1">Verify hash chain</button>
+</form>
+{% if verify %}<div class="flash {{ 'ok' if verify.intact else 'err' }}">{% if verify.intact %}Chain intact: {{ verify.entries }} entries, no tampering detected.{% else %}Chain BROKEN at seq {{ verify.first_broken_seq }}!{% endif %}</div>{% endif %}
+<table>
+<tr><th>#</th><th>When (UTC)</th><th>Actor</th><th>Action</th><th>Target</th><th>Outcome</th><th>Detail</th></tr>
+{% for r in rows %}<tr class="out-{{ r.outcome }}"><td>{{ r.seq }}</td><td class="nowrap">{{ r.at.strftime('%m-%d %H:%M:%S') }}</td><td>{{ r.actor_type }}</td><td>{{ r.action }}</td>
+<td class="small">{{ r.target or '' }}</td><td>{{ r.outcome }}</td><td class="small"><details><summary>{{ r.request_id }}</summary><pre class="args">{{ r.detail|tojson_pretty }}</pre><div class="muted">hash {{ r.hash[:16] }}…</div></details></td></tr>
+{% endfor %}
+</table>
+{% endblock %}

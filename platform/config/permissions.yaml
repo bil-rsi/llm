@@ -1,0 +1,75 @@
+# Permission SEED (formerly policy.yaml). Loaded into the database only when the permission tables are empty;
+# afterwards you manage everything in the admin console (http://127.0.0.1:8090/admin → Permissions).
+# `scripts\platform-reset-permissions.ps1` re-applies this file (it backs up the current rules first).
+#
+# Modes (switched by you in the admin console, never by the model):
+#   normal      reads run; writes, deletes, shell and non-GET web requests ask for confirmation
+#   autonomous  approved folders/tools/domains run without asking; destructive ops outside the rules are BLOCKED
+#   bypass      no confirmations. Also unlocks the bypass capabilities below (extra folders, any shell command,
+#               LAN/localhost targets you list, unrestricted internet). Needs password re-entry to switch on.
+#
+# Hard limits that no mode or rule can lift (code, not data): the model cannot read or change permissions;
+# tools never reach Postgres, the embed server, the model endpoints, the backend/admin API or cloud metadata;
+# only mounted folders exist for the tools; every action is audited.
+#
+# Rule matching: tool_pattern (exact or `category.*` / `*`), mode (or `*`), optional scope (path glob relative to a
+# root, e.g. `sandbox/**`; domain glob; command name). Highest priority wins; on a tie deny > confirm > allow.
+# No matching rule → default by risk (see `defaults`).
+
+settings:
+  mode: normal
+  internet_mode: restricted        # disabled | restricted | trusted | unrestricted
+  taint_escalation: false          # true = after reading web/untrusted content, writes/shell/new domains ask again
+  shell_network: false             # give the shell sandbox network access (Bypass only; needs platform-up restart)
+  bypass:
+    extra_folders: true            # extra folders you add are usable (they are always mounted read/write as configured)
+    broad_shell: true              # any command (incl. sh -c) inside the sandbox container
+    private_network: true          # web tools may reach the private/LAN/localhost targets you list
+    unrestricted_internet: true    # any public domain, any method, no confirmation
+
+defaults:                          # effect when no rule matches, per mode and tool risk
+  normal:     { read: allow, write: confirm, destructive: confirm, execute: confirm, network: allow }
+  autonomous: { read: allow, write: confirm, destructive: deny,    execute: confirm, network: allow }
+  bypass:     { read: allow, write: allow,   destructive: allow,   execute: allow,   network: allow }
+
+rules:
+  # normal
+  - { tool: "web.request",       mode: normal,     effect: confirm, note: "non-GET HTTP always asks in normal mode" }
+  - { tool: "memory.forget",     mode: normal,     effect: confirm }
+  - { tool: "shell.execute",     mode: normal,     effect: confirm }
+  # autonomous: work freely in sandbox and projects, delete only in sandbox
+  - { tool: "filesystem.*",      mode: autonomous, scope: { path: "sandbox/**" },  effect: allow, priority: 200 }
+  - { tool: "filesystem.create", mode: autonomous, scope: { path: "projects/**" }, effect: allow, priority: 150 }
+  - { tool: "filesystem.write",  mode: autonomous, scope: { path: "projects/**" }, effect: allow, priority: 150 }
+  - { tool: "filesystem.modify", mode: autonomous, scope: { path: "projects/**" }, effect: allow, priority: 150 }
+  - { tool: "filesystem.rename", mode: autonomous, scope: { path: "projects/**" }, effect: allow, priority: 150 }
+  - { tool: "filesystem.move",   mode: autonomous, scope: { path: "projects/**" }, effect: allow, priority: 150 }
+  - { tool: "filesystem.delete", mode: autonomous, scope: { path: "projects/**" }, effect: confirm, priority: 150,
+      note: "deleting project files still asks; add a rule for trusted folders to skip it" }
+  - { tool: "shell.execute",     mode: autonomous, effect: allow, note: "allowlisted read-only commands only outside bypass" }
+  - { tool: "memory.*",          mode: autonomous, effect: allow }
+  - { tool: "web.request",       mode: autonomous, effect: confirm }
+  # everything is allowed in bypass by the defaults above; keep explicit denies here if you want exceptions, e.g.
+  # - { tool: "filesystem.delete", mode: bypass, scope: { path: "projects/important/**" }, effect: deny, priority: 500 }
+
+roots:                             # default zones inside C:\AIWorkspace; extra folders are added in the admin console
+  - { name: allowed,  host: "allowed",  access: ro }
+  - { name: projects, host: "projects", access: rw }
+  - { name: sandbox,  host: "sandbox",  access: rw }
+
+network:
+  public_domains:                  # reachable in restricted mode; `*.` matches subdomains
+    - docs.python.org
+    - "*.wikipedia.org"
+    - github.com
+    - raw.githubusercontent.com
+    - api.github.com
+    - pypi.org
+    - developer.mozilla.org
+    - learn.microsoft.com
+    - laravel.com
+    - www.php.net
+    - stackoverflow.com
+    - huggingface.co
+    - ollama.com
+  private_hosts: []                # Bypass only, e.g. { host: "localhost", port: 3000 } or { host: "192.168.1.10" }

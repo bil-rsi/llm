@@ -1,0 +1,98 @@
+# Application settings (read-only in the container). Permissions live in the database (seeded from permissions.yaml)
+# and are edited in the admin console. Restart the backend after editing this file: scripts\platform-up.ps1
+
+server:
+  allowed_hosts: ["127.0.0.1:8090", "localhost:8090"]   # Host-header allowlist (DNS-rebinding protection)
+  allowed_origins: ["http://127.0.0.1:8090", "http://localhost:8090"]
+  session_hours: 12
+  elevation_minutes: 10          # password re-entry window for Bypass / permission changes
+
+provider:
+  active: ollama                 # ollama | openai_compat
+  ollama:
+    base_url: http://host.docker.internal:11434
+    model: qwen3.6-35b-a3b
+  openai_compat:                 # llama.cpp llama-server (C:\llm\scripts\start.ps1), vLLM, LM Studio...
+    base_url: http://host.docker.internal:8080/v1
+    model: qwen3.6-35b-a3b
+    api_key_secret: null         # name of a Docker secret file if the endpoint needs a key
+  num_ctx: 16384
+  temperature: 0.7
+  top_p: 0.8
+  max_output_tokens: 4096
+  think: false                   # default; clients may override (chat_template_kwargs.enable_thinking / think)
+  connect_timeout_s: 3
+  first_token_timeout_s: 180     # cold model load on this laptop takes a while
+  idle_timeout_s: 90
+  retries: 2
+
+embedding:
+  base_url: http://embed:8081
+  model: qwen3-embedding-0.6b
+  dims: 1024
+  query_instruction: "Instruct: Given a user message, retrieve stored memories about the user that help answer it\nQuery: "
+  cache_size: 2048
+
+context:
+  reserve_output_tokens: 2048    # kept free for the answer
+  memory_share: 0.15             # max share of the prompt budget for long-term memories
+  short_term_share: 0.10         # task state / notes / summary
+  min_recent_turns: 2
+  summarise_after_messages: 24   # older turns are folded into a rolling summary
+
+memory:
+  retrieval:
+    top_k: 8                     # candidates per method before fusion
+    max_injected: 6
+    min_score: 0.012             # fused-score floor (RRF scale)
+    min_cosine: 0.35
+    rrf_k: 60
+    recency_half_life_days: 90
+    ef_search: 40
+  dedupe_cosine: 0.92
+  extraction: auto               # auto | explicit_only | off
+  auto_activate_confidence: 0.7
+  allow_sensitive: false         # never store secrets unless you set this
+  store_personal: false          # emails/phones etc. only when you say "remember"
+  default_ttl_days: { context: 30 }
+  short_term_ttl_minutes: 720
+  sweep_interval_s: 60
+
+tools:
+  max_rounds: 8
+  max_calls_per_turn: 16
+  result_max_chars: 12000
+  approval_timeout_s: 180
+
+filesystem:
+  max_read_bytes: 1048576
+  max_write_bytes: 2097152
+  trash_retention_days: 30
+  versions_keep: 10
+  # Writing these is blocked outside Bypass mode (scripts/executables the AI could plant for you to run)
+  write_denied_extensions: [.exe, .dll, .bat, .cmd, .ps1, .psm1, .psd1, .vbs, .vbe, .js, .jse, .wsf, .wsh, .msi, .msp, .scr, .lnk, .reg, .com, .sys, .cpl, .hta, .pif, .jar]
+
+shell:
+  default_timeout_s: 10
+  max_timeout_s: 60
+  max_output_bytes: 65536
+
+web:
+  connect_timeout_s: 5
+  total_timeout_s: 20
+  max_bytes: 2097152
+  max_redirects: 3
+  allowed_ports: [80, 443]
+  rate_per_minute: 30
+  rate_per_domain_per_minute: 10
+  content_types: [text/html, text/plain, text/markdown, application/json, application/xml, application/rss+xml, application/atom+xml, text/xml]
+  search:
+    provider: duckduckgo         # duckduckgo (html.duckduckgo.com via the guarded client) | searxng (optional profile) | none
+    searxng_url: http://searxng:8080
+
+rate_limits:
+  login_per_minute: 5
+  chat_per_minute: 30
+
+logging:
+  level: INFO

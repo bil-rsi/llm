@@ -1,0 +1,5 @@
+{% extends "base.html" %}{% block title %}Approvals{% endblock %}
+{% block body %}
+<h1>Approvals <span class="muted small">the chat waits while a request is pending (refreshes every 3 s)</span></h1>
+<div hx-get="/admin/approvals" hx-trigger="every 3s" hx-swap="innerHTML">{% include "approvals_list.html" %}</div>
+{% endblock %}

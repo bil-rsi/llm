@@ -1,0 +1,12 @@
+# gitleaks config for the platform folder: default rules + ignore generated, never-committed locations.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "generated secrets/backups are gitignored; test fixtures contain fake secrets on purpose"
+paths = [
+  '''secrets/''',
+  '''backups/''',
+  '''backend/tests/''',
+  '''\.env$''',
+]

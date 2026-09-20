@@ -1,0 +1,13 @@
+{% for a in items %}
+<div class="card approval">
+  <div class="row between"><h2>{{ a.summary }}</h2><span class="small muted">expires {{ a.expires_at.strftime('%H:%M:%S') }} UTC</span></div>
+  <p>Tool <b>{{ a.tool_name }}</b> · mode {{ a.mode }} · why asked: {{ a.decision_reason }}
+     {% if a.tainted %}<span class="tag warn">this turn read untrusted content</span>{% endif %}</p>
+  <pre class="args">{{ a.arguments|tojson_pretty }}</pre>
+  <div class="row">
+    <form method="post" action="/admin/approvals/{{ a.id }}" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="decision" value="approve"><button class="primary">Approve</button></form>
+    <form method="post" action="/admin/approvals/{{ a.id }}" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="decision" value="deny"><button class="danger">Deny</button></form>
+    {% if a.conversation_id %}<a class="small" href="/admin/conversations/{{ a.conversation_id }}">view chat</a>{% endif %}
+  </div>
+</div>
+{% else %}<p class="muted">Nothing is waiting for approval.</p>{% endfor %}

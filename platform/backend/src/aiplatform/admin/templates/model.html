@@ -1,0 +1,18 @@
+{% extends "base.html" %}{% block title %}Model{% endblock %}
+{% block body %}
+<h1>Model configuration</h1>
+<div class="card"><b class="{{ 'good' if health.ok else 'bad' }}">●</b> {{ health.provider }} · {{ health.model }} · {{ health.detail }}{% if health.loaded is not none %} · {{ 'loaded in memory' if health.loaded else 'not loaded (first request loads it)' }}{% endif %}
+<div class="small muted">Token estimate: {{ '%.2f'|format(cpt) }} characters per token (calibrated from real requests).</div></div>
+<form method="post" action="/admin/model" class="card form-grid">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <label>Provider <select name="provider"><option value="ollama" {{ 'selected' if params.provider == 'ollama' }}>Ollama (127.0.0.1:11434)</option><option value="openai_compat" {{ 'selected' if params.provider == 'openai_compat' }}>llama.cpp llama-server (127.0.0.1:8080)</option></select></label>
+  <label>Temperature <input name="temperature" value="{{ params.temperature }}" size="5"></label>
+  <label>Top-p <input name="top_p" value="{{ params.top_p }}" size="5"></label>
+  <label>Context length (tokens) <input name="num_ctx" value="{{ params.num_ctx }}" size="7"></label>
+  <label>Max answer tokens <input name="max_output_tokens" value="{{ params.max_output_tokens }}" size="7"></label>
+  <label class="check"><input type="checkbox" name="think" {{ 'checked' if params.think }}> Thinking (reasoning) by default</label>
+  <p class="small muted">Only one model fits in RAM at a time: stop llama-server (C:\llm\scripts\stop.ps1) before using Ollama and vice versa.
+  A larger context uses more memory and makes the first answer slower.</p>
+  <button class="primary">Save</button>
+</form>
+{% endblock %}

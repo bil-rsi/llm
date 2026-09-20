@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Admin{% endblock %} · Local AI</title>
+  <link rel="stylesheet" href="/admin/static/admin.css">
+  <script src="/admin/static/htmx.min.js" defer></script>
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="/admin">Qwen3.6 Local AI</a>
+  <nav>
+    {% set links = [("/admin","Dashboard"),("/admin/approvals","Approvals"),("/admin/memories","Memory"),("/admin/conversations","Chats"),("/admin/tools","Tool log"),("/admin/permissions","Permissions"),("/admin/audit","Audit"),("/admin/model","Model"),("/admin/account","Account")] %}
+    {% for href, label in links %}<a href="{{ href }}" class="{{ 'on' if nav == href else '' }}">{{ label }}</a>{% endfor %}
+    <a href="/" class="chat">Open chat ↗</a>
+  </nav>
+  <span class="mode mode-{{ mode }}" title="Permission mode">{{ mode|upper }}</span>
+  <form method="post" action="/admin/logout" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="link">Log out</button></form>
+</header>
+<main>
+  {% if msg %}<div class="flash ok">{{ msg }}</div>{% endif %}
+  {% if err %}<div class="flash err">{{ err }}</div>{% endif %}
+  {% block body %}{% endblock %}
+</main>
+</body>
+</html>
