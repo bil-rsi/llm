@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in · Local AI</title><link rel="stylesheet" href="/admin/static/admin.css"></head>
+<body class="center">
+<form method="post" action="/admin/login" class="card login">
+  <h1>Qwen3.6 Local AI</h1>
+  <p class="muted">Sign in to use the chat and the admin console.</p>
+  {% if err %}<div class="flash err">{{ err }}</div>{% endif %}
+  <input type="hidden" name="next" value="{{ next }}">
+  <label>Username <input name="username" value="admin" autocomplete="username" required></label>
+  <label>Password <input name="password" type="password" autocomplete="current-password" required autofocus></label>
+  <button class="primary">Sign in</button>
+  <p class="muted small">First login: the password is in <code>platform\secrets\admin_bootstrap.txt</code>.</p>
+</form>
+</body>
+</html>

@@ -1,0 +1,31 @@
+# Runtime server state and logs
+logs/
+
+# Large model weights and downloaded llama.cpp builds
+models/*.gguf
+llama.cpp/
+
+# Platform: generated secrets, backups, runtime state
+platform/secrets/*
+!platform/secrets/README.md
+platform/backups/*
+!platform/backups/.gitkeep
+platform/config/runtime/
+platform/compose.mounts.yaml
+platform/bench/results/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+
+# Claude Code worktrees
+.claude/worktrees/
+
+# Editor / OS noise
+.vscode/
+*.swp
+Thumbs.db
+Desktop.ini
+platform/.env

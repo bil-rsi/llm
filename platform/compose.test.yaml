@@ -1,0 +1,53 @@
+# Throwaway test stack (scripts\platform-check.ps1). Data lives in tmpfs and is destroyed after each run; the network
+# is internal (no internet, no host access). Passwords are random per run, passed in by the check script.
+name: aiptest
+
+services:
+  testdb:
+    image: pgvector/pgvector:0.8.6-pg18-trixie
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/pg_superuser
+    secrets: [pg_superuser, pg_owner, pg_app, pg_backup]
+    volumes:
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    tmpfs: ["/var/lib/postgresql:size=512m"]
+    command: postgres -c fsync=off -c synchronous_commit=off -c jit=off -c shared_preload_libraries=pg_stat_statements
+    networks: [test_net]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d aiplatform -h 127.0.0.1"]
+      interval: 2s
+      retries: 30
+
+  tests:
+    image: aiplatform-backend-dev:latest
+    build: { context: ./backend, target: dev }
+    working_dir: /src
+    environment:
+      AIP_TEST_DB_HOST: testdb
+      AIP_TEST_OWNER_PW: ${AIP_TEST_OWNER_PW:?}
+      AIP_TEST_APP_PW: ${AIP_TEST_APP_PW:?}
+      AIP_MIGRATIONS_DIR: /migrations
+      AIP_TEST_CONFIG_DIR: /config
+      HYPOTHESIS_STORAGE_DIRECTORY: /tmp/hypothesis
+    volumes:
+      - ./backend/src:/src/src:ro
+      - ./backend/tests:/src/tests:ro
+      - ./backend/pyproject.toml:/src/pyproject.toml:ro
+      - ./db/migrations:/migrations:ro
+      - ./config:/config:ro
+      - ./tool-runner:/tool-runner:ro
+    networks: [test_net]
+    depends_on:
+      testdb: { condition: service_healthy }
+
+networks:
+  test_net:
+    internal: true
+
+secrets:
+  pg_superuser: { environment: AIP_TEST_SUPER_PW }
+  pg_owner:     { environment: AIP_TEST_OWNER_PW }
+  pg_app:       { environment: AIP_TEST_APP_PW }
+  pg_backup:    { environment: AIP_TEST_BACKUP_PW }

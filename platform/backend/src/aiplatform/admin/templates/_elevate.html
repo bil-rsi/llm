@@ -1,0 +1,6 @@
+<form method="post" action="/admin/account/elevate" class="row elevate">
+  <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="back" value="{{ back }}">
+  <span>🔒 Re-enter your password to unlock changes for a few minutes:</span>
+  <input type="password" name="password" autocomplete="current-password" required>
+  <button class="primary">Unlock</button>
+</form>

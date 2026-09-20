@@ -1,0 +1,40 @@
+{% extends "base.html" %}{% block title %}Dashboard{% endblock %}
+{% block body %}
+<h1>Dashboard <span class="muted small">last 24 h</span></h1>
+<section class="grid4">
+  <div class="card stat"><div class="label">Model</div><div class="value {{ 'good' if health.ok else 'bad' }}">{{ '●' }} {{ params.model }}</div>
+    <div class="small muted">{{ params.provider }} · {{ health.detail }}{% if health.loaded %} · loaded{% endif %}</div></div>
+  <div class="card stat"><div class="label">Memory</div>
+    <div class="value">● {{ s.memory.short_term_active }} short-term · ● {{ s.memory.long_term.get('active', 0) }} long-term</div>
+    <div class="small muted">{{ s.memory.long_term.get('candidate', 0) }} candidates to review</div></div>
+  <div class="card stat"><div class="label">Approvals waiting</div><div class="value {{ 'bad' if approvals else '' }}">{{ approvals }}</div>
+    <div class="small"><a href="/admin/approvals">review →</a></div></div>
+  <div class="card stat"><div class="label">Services</div>
+    <div class="value small">embeddings <b class="{{ 'good' if embed_ok else 'bad' }}">●</b> · shell sandbox <b class="{{ 'good' if runner_ok else 'bad' }}">●</b></div>
+    <div class="small muted">DB {{ ((s.database.bytes or 0) / 1048576)|round(1) }} MB · cache hit {{ s.database.cache_hit_pct }}%</div></div>
+</section>
+<section class="grid2">
+  <div class="card"><h2>Model performance</h2>
+    <table class="kv">
+      <tr><th>Responses</th><td>{{ s.model.responses }} ({{ s.model.errors }} errors)</td></tr>
+      <tr><th>Tokens</th><td>{{ s.model.prompt_tokens or 0 }} prompt · {{ s.model.completion_tokens or 0 }} completion</td></tr>
+      <tr><th>Time to first token</th><td>p50 {{ (s.model.ttft_p50 or 0)|round|int }} ms · p95 {{ (s.model.ttft_p95 or 0)|round|int }} ms</td></tr>
+      <tr><th>Round total</th><td>p50 {{ (s.model.total_p50 or 0)|round|int }} ms · p95 {{ (s.model.total_p95 or 0)|round|int }} ms</td></tr>
+      <tr><th>Generation speed</th><td>{{ (s.model.tokens_per_s or 0)|round(1) }} tokens/s</td></tr>
+    </table></div>
+  <div class="card"><h2>Internal latency (ms, this process)</h2>
+    <table><tr><th>Stage</th><th>n</th><th>p50</th><th>p95</th><th>p99</th></tr>
+    {% for k, v in s.stages_ms|dictsort %}<tr><td>{{ k }}</td><td>{{ v.n }}</td><td>{{ '%.2f'|format(v.p50) }}</td><td>{{ '%.2f'|format(v.p95) }}</td><td>{{ '%.2f'|format(v.p99) }}</td></tr>{% else %}<tr><td colspan="5" class="muted">no requests yet</td></tr>{% endfor %}
+    </table></div>
+</section>
+<section class="grid2">
+  <div class="card"><h2>Tool usage</h2>
+    <table><tr><th>Tool</th><th>Calls</th><th>OK</th><th>Failed</th><th>Blocked</th><th>Avg ms</th></tr>
+    {% for t in s.tools %}<tr><td>{{ t.tool_name }}</td><td>{{ t.calls }}</td><td>{{ t.ok }}</td><td>{{ t.failed }}</td><td>{{ t.blocked }}</td><td>{{ t.avg_ms or '' }}</td></tr>{% else %}<tr><td colspan="6" class="muted">no tool calls yet</td></tr>{% endfor %}
+    </table></div>
+  <div class="card"><h2>Recently blocked</h2>
+    <table><tr><th>When</th><th>Tool</th><th>Why</th></tr>
+    {% for b in s.blocked_recent %}<tr><td class="nowrap">{{ b.requested_at.strftime('%H:%M:%S') }}</td><td>{{ b.tool_name }}</td><td>{{ b.decision_reason }}</td></tr>{% else %}<tr><td colspan="3" class="muted">nothing blocked</td></tr>{% endfor %}
+    </table></div>
+</section>
+{% endblock %}

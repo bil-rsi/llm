@@ -1,0 +1,41 @@
+{% extends "base.html" %}{% block title %}Account{% endblock %}
+{% block body %}
+<h1>Account</h1>
+{% if p.must_change_password %}<div class="flash err">You are using the bootstrap password. Choose your own password to continue.</div>{% endif %}
+<section class="grid2">
+<form method="post" action="/admin/account/password" class="card">
+  <h2>Change password</h2>
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <label>Current password <input type="password" name="current" autocomplete="current-password" required></label>
+  <label>New password <input type="password" name="new" autocomplete="new-password" minlength="12" required></label>
+  <p class="small muted">At least 12 characters, three of: lowercase, uppercase, digits, symbols.</p>
+  <button class="primary">Change password</button>
+</form>
+{% if not p.must_change_password %}
+<div class="card">
+  <h2>API tokens</h2>
+  <p class="small muted">Use a <b>chat</b> token in the web UI (Settings → API key) or other OpenAI-compatible clients.
+     The web UI also works without a token while you are signed in here.</p>
+  {% if new_token %}<div class="flash ok">New token (shown once, copy it now):<br><code class="token">{{ new_token }}</code></div>{% endif %}
+  <table><tr><th>Name</th><th>Scopes</th><th>Last used</th><th>Expires</th><th></th></tr>
+  {% for t in tokens %}<tr class="{{ 'muted' if t.revoked_at else '' }}"><td>{{ t.name }}</td><td>{{ t.scopes|join(', ') }}</td>
+    <td>{{ t.last_used_at.strftime('%Y-%m-%d %H:%M') if t.last_used_at else '—' }}</td><td>{{ t.expires_at.date() if t.expires_at else 'never' }}</td>
+    <td>{% if not t.revoked_at %}<form method="post" action="/admin/account/tokens/{{ t.id }}/revoke" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="danger small">Revoke</button></form>{% else %}revoked{% endif %}</td></tr>
+  {% else %}<tr><td colspan="5" class="muted">no tokens</td></tr>{% endfor %}</table>
+  {% if p.elevated %}
+  <form method="post" action="/admin/account/tokens" class="row">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input name="name" placeholder="name, e.g. web-ui" required maxlength="100">
+    <label class="check"><input type="checkbox" name="scope_chat" checked> chat</label>
+    <label class="check"><input type="checkbox" name="scope_read"> read</label>
+    <label class="check"><input type="checkbox" name="scope_admin"> admin</label>
+    <input name="days" placeholder="days (blank = never)" size="12">
+    <button class="primary">Create token</button>
+  </form>
+  {% else %}
+  {% with back="/admin/account" %}{% include "_elevate.html" %}{% endwith %}
+  {% endif %}
+</div>
+{% endif %}
+</section>
+{% endblock %}

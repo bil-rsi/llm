@@ -1,0 +1,88 @@
+{% extends "base.html" %}{% block title %}Permissions{% endblock %}
+{% block body %}
+<h1>Permissions</h1>
+<p class="muted small">Only you can change these — the AI has no tool that can read or modify them. Hard limits that no setting can lift:
+tools only see the mounted folders; Postgres, the model endpoints, the embed server and this console are never reachable from tools; everything is audited.</p>
+{% if restart %}<div class="flash warn">Folder mounts or shell network changed — run <code>scripts\platform-up.ps1</code> to apply.</div>{% endif %}
+{% if not p.elevated %}{% with back="/admin/permissions" %}{% include "_elevate.html" %}{% endwith %}{% else %}<div class="flash ok small">🔓 Unlocked.</div>{% endif %}
+
+<form method="post" action="/admin/permissions/settings" class="card">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <h2>Mode</h2>
+  <div class="modes">
+  {% for m, d in [('normal','Reads run. Writes, deletes, shell and non-GET web requests ask you first.'),('autonomous','Approved folders, tools and domains run without asking. Destructive actions outside the rules are blocked.'),('bypass','No confirmations. Unlocks the Bypass capabilities below. Hard limits still apply.')] %}
+    <label class="mode-card mode-{{ m }}"><input type="radio" name="mode" value="{{ m }}" {{ 'checked' if settings.mode == m }}> <b>{{ m|capitalize }}</b><br><span class="small">{{ d }}</span></label>
+  {% endfor %}
+  </div>
+  <h2>Internet</h2>
+  <select name="internet_mode">{% for m in ['disabled','restricted','trusted','unrestricted'] %}<option {{ 'selected' if settings.internet_mode == m }}>{{ m }}</option>{% endfor %}</select>
+  <span class="small muted">restricted = allowlisted domains only · trusted = others ask first · unrestricted = any public site. Private/LAN addresses: Bypass + list below only.</span>
+  <h2>Bypass capabilities <span class="small muted">(only active in Bypass mode)</span></h2>
+  {% set bp = settings.bypass or {} %}
+  <label class="check"><input type="checkbox" name="bypass_extra_folders" {{ 'checked' if bp.get('extra_folders', true) }}> Extra folders</label>
+  <label class="check"><input type="checkbox" name="bypass_broad_shell" {{ 'checked' if bp.get('broad_shell', true) }}> Any shell command (inside the sandbox)</label>
+  <label class="check"><input type="checkbox" name="bypass_private_network" {{ 'checked' if bp.get('private_network', true) }}> LAN / localhost targets you list</label>
+  <label class="check"><input type="checkbox" name="bypass_unrestricted_internet" {{ 'checked' if bp.get('unrestricted_internet', true) }}> Unrestricted internet (any domain, any method)</label>
+  <h2>Other</h2>
+  <label class="check"><input type="checkbox" name="taint_escalation" {{ 'checked' if settings.taint_escalation }}> Ask again after the AI has read web/untrusted content (prompt-injection defence)</label>
+  <label class="check"><input type="checkbox" name="shell_network" {{ 'checked' if settings.shell_network }}> Give the shell sandbox network access (needs platform-up restart)</label>
+  <div><button class="primary" {{ 'disabled' if not p.elevated }}>Save</button></div>
+</form>
+
+<div class="card">
+  <h2>Rules <span class="small muted">highest priority wins; on a tie deny &gt; confirm &gt; allow; no match → default by risk</span></h2>
+  <table><tr><th>Tool</th><th>Mode</th><th>Scope</th><th>Effect</th><th>Priority</th><th>Note</th><th>Origin</th><th></th></tr>
+  {% for r in rules %}<tr class="{{ 'muted' if not r.enabled }}"><td>{{ r.tool_pattern }}</td><td>{{ r.mode }}</td><td>{{ r.scope_type }}{% if r.scope_type != 'any' %}: <code>{{ r.scope_pattern }}</code>{% endif %}</td>
+    <td class="eff-{{ r.effect }}">{{ r.effect }}</td><td>{{ r.priority }}</td><td class="small">{{ r.note }}</td><td class="small">{{ r.origin }}</td>
+    <td><form method="post" action="/admin/permissions/rule-delete" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="id" value="{{ r.id }}"><button class="small danger" {{ 'disabled' if not p.elevated }}>Delete</button></form></td></tr>
+  {% endfor %}</table>
+  <form method="post" action="/admin/permissions/rule" class="row">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input name="tool_pattern" placeholder="filesystem.delete or web.*" required size="18">
+    <select name="mode"><option>*</option><option>normal</option><option>autonomous</option><option>bypass</option></select>
+    <select name="scope_type"><option>any</option><option>path</option><option>domain</option><option>command</option></select>
+    <input name="scope_pattern" placeholder="projects/app/** · github.com · git" size="22">
+    <select name="effect"><option>allow</option><option>confirm</option><option>deny</option></select>
+    <input name="priority" value="200" size="5"><input name="note" placeholder="note" size="18">
+    <button class="primary" {{ 'disabled' if not p.elevated }}>Add rule</button>
+  </form>
+  <form method="post" action="/admin/permissions/reseed" class="inline small"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="small" {{ 'disabled' if not p.elevated }}>Reset seed rules from permissions.yaml</button></form>
+</div>
+
+<section class="grid2">
+<div class="card">
+  <h2>Folders</h2>
+  <table><tr><th>Name</th><th>Windows path</th><th>Access</th><th>Kind</th><th></th></tr>
+  {% for r in roots %}<tr><td>{{ r.name }}</td><td><code>{{ r.host_path if r.kind == 'extra' else 'C:\\AIWorkspace\\' ~ r.host_path }}</code></td><td>{{ r.access }}</td><td>{{ r.kind }}{{ ' (Bypass)' if r.bypass_only }}</td>
+    <td>{% if r.kind == 'extra' %}<form method="post" action="/admin/permissions/root-delete" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="name" value="{{ r.name }}"><button class="small danger" {{ 'disabled' if not p.elevated }}>Remove</button></form>{% endif %}</td></tr>{% endfor %}</table>
+  <form method="post" action="/admin/permissions/root" class="row">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input name="name" placeholder="name" size="10" required><input name="host_path" placeholder="D:\Projects" size="22" required>
+    <select name="access"><option value="ro">read-only</option><option value="rw">read/write</option></select>
+    <button class="primary" {{ 'disabled' if not p.elevated }}>Add folder</button>
+  </form>
+</div>
+<div class="card">
+  <h2>Internet allowlist</h2>
+  <table><tr><th>Kind</th><th>Host</th><th>Port</th><th>Methods</th><th></th></tr>
+  {% for n in network %}<tr><td>{{ 'public' if n.kind == 'public_domain' else 'LAN / local' }}</td><td>{{ n.host }}</td><td>{{ n.port or 'default' }}</td><td class="small">{{ n.methods|join(' ') }}</td>
+    <td><form method="post" action="/admin/permissions/network-delete" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="id" value="{{ n.id }}"><button class="small danger" {{ 'disabled' if not p.elevated }}>Remove</button></form></td></tr>{% endfor %}</table>
+  <form method="post" action="/admin/permissions/network" class="row">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <select name="kind"><option value="public_domain">public domain</option><option value="private_host">LAN / localhost</option></select>
+    <input name="host" placeholder="docs.example.com, *.example.org, localhost, 192.168.1.10" size="26" required>
+    <input name="port" placeholder="port" size="5">
+    {% for m in ['GET','HEAD','POST','PUT','PATCH','DELETE'] %}<label class="check small"><input type="checkbox" name="m_{{ m }}" {{ 'checked' if m in ['GET','HEAD'] }}>{{ m }}</label>{% endfor %}
+    <button class="primary" {{ 'disabled' if not p.elevated }}>Add</button>
+  </form>
+</div>
+</section>
+
+<div class="card">
+  <h2>Tools</h2>
+  <table><tr><th>Tool</th><th>Risk</th><th>Description</th><th>Enabled</th></tr>
+  {% for t in tools %}<tr><td>{{ t.name }}</td><td>{{ t.risk }}</td><td class="small">{{ t.description }}</td>
+    <td><form method="post" action="/admin/permissions/tool" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="name" value="{{ t.name }}">
+      {% if t.enabled %}<button class="small" {{ 'disabled' if not p.elevated }}>Disable</button>{% else %}<input type="hidden" name="enabled" value="on"><button class="small primary" {{ 'disabled' if not p.elevated }}>Enable</button>{% endif %}</form></td></tr>{% endfor %}</table>
+</div>
+{% endblock %}

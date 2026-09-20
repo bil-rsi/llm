@@ -1,0 +1,56 @@
+{% extends "base.html" %}{% block title %}Memory{% endblock %}
+{% block body %}
+<h1>Long-term memory</h1>
+<p class="muted small">
+  {% for k, v in stats|dictsort %}<a href="?status={{ k }}">{{ k }}: {{ v }}</a>{{ ' · ' if not loop.last }}{% endfor %}
+  — Candidates come from the model or from web/tool content; they are not used until you approve them.
+</p>
+<section class="grid2">
+  <form method="get" class="card row">
+    <select name="status"><option value="">any status</option>{% for s in ['active','candidate','superseded','rejected','expired','deleted'] %}<option {{ 'selected' if s == status }}>{{ s }}</option>{% endfor %}</select>
+    <select name="kind"><option value="">any kind</option>{% for k in ['preference','fact','project','instruction','decision','context'] %}<option {{ 'selected' if k == kind }}>{{ k }}</option>{% endfor %}</select>
+    <input name="q" value="{{ q }}" placeholder="text contains…"><button>Filter</button>
+  </form>
+  <form method="get" class="card row">
+    <input name="test" value="{{ test }}" placeholder="test retrieval: type a message…" size="40"><button>Retrieve</button>
+  </form>
+</section>
+{% if search %}
+<div class="card"><h2>Retrieval test <span class="muted small">{{ '%.1f'|format(search.ms) }} ms · {{ search.candidates }} candidates{% if search.skipped %} · skipped: {{ search.skipped }}{% endif %}</span></h2>
+<table><tr><th>Score</th><th>Cosine</th><th>Vec rank</th><th>Kw rank</th><th>Kind</th><th>Memory</th></tr>
+{% for m in search.memories %}<tr><td>{{ '%.4f'|format(m.score) }}</td><td>{{ '%.2f'|format(m.cosine) if m.cosine is not none else '—' }}</td><td>{{ m.vector_rank or '—' }}</td><td>{{ m.keyword_rank or '—' }}</td><td>{{ m.kind }}</td><td>{{ m.content }}</td></tr>
+{% else %}<tr><td colspan="6" class="muted">nothing relevant</td></tr>{% endfor %}</table></div>
+{% endif %}
+<form method="post" action="/admin/memories" class="card row">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <input name="content" placeholder="Add a memory, e.g. 'The user prefers PHP 8.3 and Laravel 11.'" size="70" minlength="8" maxlength="1000" required>
+  <select name="kind"><option value="">auto kind</option>{% for k in ['preference','fact','project','instruction','decision','context'] %}<option>{{ k }}</option>{% endfor %}</select>
+  <button class="primary">Add</button>
+</form>
+<table class="mem">
+<tr><th>Kind</th><th>Memory</th><th>Imp.</th><th>Conf.</th><th>Source</th><th>Status</th><th>Updated</th><th></th></tr>
+{% for m in items %}
+<tr class="st-{{ m.status }}">
+  <td>{{ m.kind }}</td>
+  <td>
+    <details><summary>{{ m.content }}{% for f in m.flags %} <span class="tag warn">{{ f }}</span>{% endfor %}{% if m.sensitivity != 'none' %} <span class="tag">{{ m.sensitivity }}</span>{% endif %}{% if not m.embedded and m.status in ['active','candidate'] %} <span class="tag">no vector yet</span>{% endif %}</summary>
+      <form method="post" action="/admin/memories/{{ m.id }}/edit" class="row">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <input name="content" value="{{ m.content }}" size="60" minlength="8" maxlength="1000">
+        <input name="importance" value="{{ '%.2f'|format(m.importance) }}" size="4">
+        <button class="small">Save</button>
+      </form>
+      <div class="small muted">id {{ m.id }}{% if m.expires_at %} · expires {{ m.expires_at.date() }}{% endif %} · used {{ m.access_count }}×{% if m.source_ref %} · {{ m.source_ref }}{% endif %}</div>
+    </details>
+  </td>
+  <td>{{ '%.2f'|format(m.importance) }}</td><td>{{ '%.2f'|format(m.confidence) }}</td><td>{{ m.source_type }}</td><td>{{ m.status }}</td>
+  <td class="nowrap">{{ m.updated_at.strftime('%Y-%m-%d') }}</td>
+  <td class="nowrap">
+    {% if m.status == 'candidate' %}<form method="post" action="/admin/memories/{{ m.id }}/approve" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="small primary">Approve</button></form>
+    <form method="post" action="/admin/memories/{{ m.id }}/reject" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="small">Reject</button></form>{% endif %}
+    {% if m.status != 'deleted' %}<form method="post" action="/admin/memories/{{ m.id }}/delete" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="small danger">Delete</button></form>{% endif %}
+  </td>
+</tr>
+{% else %}<tr><td colspan="8" class="muted">No memories yet. Tell the chat "remember that …", or add one above.</td></tr>{% endfor %}
+</table>
+{% endblock %}

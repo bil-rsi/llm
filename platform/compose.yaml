@@ -1,0 +1,205 @@
+# Local AI platform. Start/stop with scripts\platform-up.ps1 / platform-down.ps1 (they also generate compose.mounts.yaml).
+# Only the backend publishes a port, and only on 127.0.0.1. Postgres, embed and tool-runner are unreachable from the host/LAN.
+name: aiplatform
+
+x-hardening: &hardening
+  read_only: true
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: ["ALL"]
+
+services:
+  postgres:
+    image: pgvector/pgvector:0.8.6-pg18-trixie
+    restart: unless-stopped
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/pg_superuser
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=scram-sha-256 --data-checksums"
+    command: >
+      postgres -c shared_buffers=256MB -c effective_cache_size=768MB -c work_mem=8MB -c maintenance_work_mem=128MB
+      -c max_connections=60 -c jit=off -c track_io_timing=on -c shared_preload_libraries=pg_stat_statements
+      -c password_encryption=scram-sha-256 -c log_min_duration_statement=250 -c log_connections=off
+    secrets: [pg_superuser, pg_owner, pg_app, pg_backup]
+    volumes:
+      - pgdata:/var/lib/postgresql
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    networks: [db_net]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d aiplatform -h 127.0.0.1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+    shm_size: 256mb
+    mem_limit: 1g
+
+  backup:
+    image: pgvector/pgvector:0.8.6-pg18-trixie
+    restart: unless-stopped
+    <<: *hardening
+    user: "999:999"
+    entrypoint: ["/bin/sh", "/opt/backup/backup.sh"]
+    environment:
+      BACKUP_AT: "0230"
+      BACKUP_KEEP: "14"
+    secrets: [pg_backup]
+    volumes:
+      - ./db/backup:/opt/backup:ro
+      - ./backups:/backups
+    tmpfs: ["/tmp"]
+    networks: [db_net]
+    depends_on:
+      postgres: { condition: service_healthy }
+    mem_limit: 256m
+
+  migrate:
+    image: aiplatform-backend:latest
+    build: { context: ./backend }
+    <<: *hardening
+    command: ["python", "-m", "aiplatform.migrate"]
+    restart: "no"
+    environment:
+      AIP_DB_HOST: postgres
+      AIP_MIGRATIONS_DIR: /opt/migrations
+    secrets: [pg_owner]
+    volumes:
+      - ./db/migrations:/opt/migrations:ro
+    networks: [db_net]
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  embed:
+    image: ghcr.io/ggml-org/llama.cpp:server
+    restart: unless-stopped
+    <<: *hardening
+    user: "10003:10003"
+    command: >
+      -m /models/Qwen3-Embedding-0.6B-Q8_0.gguf -a qwen3-embedding-0.6b --embedding --pooling last
+      -c 4096 -b 4096 -ub 4096 -np 2 -t 4 --host 0.0.0.0 --port 8081 --no-warmup
+    volumes:
+      - ${AIP_MODELS_DIR:-C:/llm/models}/Qwen3-Embedding-0.6B-Q8_0.gguf:/models/Qwen3-Embedding-0.6B-Q8_0.gguf:ro
+    tmpfs: ["/tmp"]
+    networks: [db_net]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8081/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    mem_limit: 2g
+    cpus: 4
+
+  tool-runner:                    # restricted shell: allowlisted read-only commands, workspace mounted READ-ONLY
+    image: aiplatform-tool-runner:latest
+    build: { context: ., dockerfile: tool-runner/Dockerfile }
+    restart: unless-stopped
+    <<: *hardening
+    user: "10002:10002"
+    network_mode: none
+    environment:
+      RUNNER_SOCKET: /run/aip/runner.sock
+      RUNNER_MODE: restricted
+    volumes:
+      - ${AIP_WORKSPACE_DIR:-C:/AIWorkspace}:/workspace:ro
+      - runner_sock:/run/aip
+    tmpfs: ["/tmp:size=256m", "/home/runner:size=256m,uid=10002,gid=10002"]
+    pids_limit: 256
+    mem_limit: 1g
+    cpus: 2
+    ulimits:
+      nofile: { soft: 1024, hard: 1024 }
+
+  tool-runner-broad:              # Bypass "any shell command": read-write workspace; network only if you enable it
+    image: aiplatform-tool-runner:latest
+    restart: unless-stopped
+    <<: *hardening
+    user: "10002:10002"
+    network_mode: none            # compose.mounts.yaml switches this to runner_net when shell network access is on
+    environment:
+      RUNNER_SOCKET: /run/aip/runner-broad.sock
+      RUNNER_MODE: broad
+    volumes:
+      - ${AIP_WORKSPACE_DIR:-C:/AIWorkspace}:/workspace
+      - ${AIP_WORKSPACE_DIR:-C:/AIWorkspace}/allowed:/workspace/allowed:ro
+      - runner_sock:/run/aip
+    tmpfs: ["/tmp:size=256m", "/home/runner:size=256m,uid=10002,gid=10002"]
+    pids_limit: 256
+    mem_limit: 1g
+    cpus: 2
+    ulimits:
+      nofile: { soft: 1024, hard: 1024 }
+
+  backend:
+    image: aiplatform-backend:latest
+    build: { context: ./backend }
+    restart: unless-stopped
+    <<: *hardening
+    user: "10001:10002"   # group 10002 = the runners' group, so it can use their unix sockets (mode 0660)
+    environment:
+      AIP_DB_HOST: postgres
+      AIP_CONFIG_FILE: /opt/config/app.yaml
+      AIP_PERMISSIONS_SEED: /opt/config/permissions.yaml
+      AIP_RUNTIME_DIR: /opt/runtime
+      AIP_RUNNER_SOCKET: /run/aip/runner.sock
+      AIP_WORKSPACE_HOST_DIR: ${AIP_WORKSPACE_DIR:-C:/AIWorkspace}
+      AIP_PLATFORM_HOST_DIR: ${AIP_PLATFORM_DIR:-C:/llm-platform/platform}
+    secrets: [pg_app, session_key, admin_bootstrap]
+    ports:
+      - "127.0.0.1:8090:8090"
+    volumes:
+      - ./config/app.yaml:/opt/config/app.yaml:ro
+      - ./config/permissions.yaml:/opt/config/permissions.yaml:ro
+      - ./config/runtime:/opt/runtime            # admin-console-managed mount/network requests read by platform-up.ps1
+      - ${AIP_WORKSPACE_DIR:-C:/AIWorkspace}:/workspace
+      - ${AIP_WORKSPACE_DIR:-C:/AIWorkspace}/allowed:/workspace/allowed:ro   # defence in depth for the read-only zone
+      - runner_sock:/run/aip
+    tmpfs: ["/tmp:size=128m"]
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    networks: [db_net, egress_net]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      embed: { condition: service_healthy }
+      tool-runner: { condition: service_started }
+      tool-runner-broad: { condition: service_started }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8090/health/live', timeout=3).status==200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    mem_limit: 1g
+
+  searxng:
+    image: searxng/searxng:latest
+    profiles: ["search"]
+    restart: unless-stopped
+    read_only: true
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    cap_add: ["CHOWN", "SETGID", "SETUID"]
+    environment:
+      SEARXNG_SECRET_FILE: /run/secrets/session_key
+    secrets: [session_key]
+    tmpfs: ["/tmp", "/etc/searxng", "/var/cache/searxng"]
+    networks: [egress_net]
+
+networks:
+  db_net:
+    internal: true            # no route to the internet or the host
+  egress_net: {}
+  runner_net: {}              # only attached when you enable shell network access in Bypass
+
+volumes:
+  pgdata:
+    name: aiplatform_pgdata
+  runner_sock: {}
+
+secrets:
+  pg_superuser:    { file: ./secrets/pg_superuser.txt }
+  pg_owner:        { file: ./secrets/pg_owner.txt }
+  pg_app:          { file: ./secrets/pg_app.txt }
+  pg_backup:       { file: ./secrets/pg_backup.txt }
+  session_key:     { file: ./secrets/session_key.txt }
+  admin_bootstrap: { file: ./secrets/admin_bootstrap.txt }

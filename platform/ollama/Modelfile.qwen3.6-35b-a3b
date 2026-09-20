@@ -1,0 +1,7 @@
+# Imported from the existing llama.cpp GGUF (no re-download). Create with scripts\platform-ollama-import.ps1
+FROM C:/llm/models/Qwen3.6-35B-A3B-UD-Q4_K_M.gguf
+PARAMETER num_ctx 16384
+PARAMETER temperature 0.7
+PARAMETER top_p 0.8
+PARAMETER top_k 20
+PARAMETER min_p 0
