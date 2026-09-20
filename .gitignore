@@ -1,14 +1,22 @@
-# Runtime server state and logs (SPEC: leave logs\server-*.log out of commits)
-logs/server*.log
-logs/server.pid
-logs/server.profile.json
+# Model weights (multi-GB). Verify downloads against models\expected-sha256.txt, which stays tracked.
+*.gguf
 
-# Large model weights and downloaded llama.cpp builds
-models/*.gguf
-llama.cpp/*.zip
+# llama.cpp release binaries (cpu\, vulkan\) and the zips they were unpacked from
+/llama.cpp/
 
-# Claude Code worktrees
-.claude/worktrees/
+# Server runtime state, rewritten by start.ps1 / stop.ps1 on every run
+/logs/server*.log
+/logs/server.pid
+/logs/server.profile.json
+
+# Per-run outputs of bench.ps1, eval.ps1 and rag-eval.ps1 (git add -f one you want to keep as a baseline).
+# logs\bench-*.txt stay tracked: README.md cites them as the baseline benchmarks.
+/logs/bench/
+/logs/eval/
+/logs/rag-eval/
+
+# Claude Code worktrees live inside the repo root
+/.claude/worktrees/
 
 # Editor / OS noise
 .vscode/

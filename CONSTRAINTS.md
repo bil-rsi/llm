@@ -59,4 +59,4 @@ Environment these rules assume: Windows PowerShell 5.1, Pester 3.4.0 (the versio
 ## Known gaps (not constraints, tracked here so they aren't forgotten)
 
 - The retrieval fixture already scores 1.0 on every metric, so it catches regressions but **can't show improvements**. It needs harder queries or a bigger corpus before it can justify ranking changes.
-- The root `.gitignore` (added 2026-09-17) only stops new files being tracked. Model `.gguf` files, llama.cpp binaries and server logs committed before it are still tracked until removed with `git rm --cached`.
+- `.gitignore` keeps models, llama.cpp binaries and run logs out of new commits. On 2026-09-20 the `.gguf` weights (about 4.5 GiB) were stripped from history and the branches published to `origin`; `llama.cpp\cpu`, `llama.cpp\vulkan` and their zips are untracked, but older commits still hold them (each blob under 50 MB).
