@@ -29,11 +29,11 @@ $models = @{
 # Backend = 'cpu' (e.g. deep, if 27B generation is faster on CPU), Draft = '<gguf>' + DraftMax = N (speculative decoding).
 # Client-side keys (ThinkThreshold, RagK, RagTokens) are read by lib.ps1 via logs\server.profile.json.
 $profiles = @{
-    speed    = @{ Model = '35b'; Ctx = 16384; Ub = 1024; Batch = 2048; Ctk = 'f16';  Ctv = 'f16';  Spec = 'none'; Budget = 512
+    speed    = @{ Model = '35b'; Ctx = 16384; Ub = 1024; Batch = 2048; Ctk = 'f16';  Ctv = 'f16';  Spec = 'none'; Budget = 512;  WebThink = $false
                   ThinkThreshold = 4; RagK = 2; RagTokens = 800 }
-    accuracy = @{ Model = '35b'; Ctx = 32768; Ub = 1024; Batch = 2048; Ctk = 'f16';  Ctv = 'f16';  Spec = 'none'; Budget = 3072
+    accuracy = @{ Model = '35b'; Ctx = 32768; Ub = 1024; Batch = 2048; Ctk = 'f16';  Ctv = 'f16';  Spec = 'none'; Budget = 3072; WebThink = $true
                   ThinkThreshold = 3; RagK = 4; RagTokens = 2000 }
-    deep     = @{ Model = '27b'; Ctx = 16384; Ub = 512;  Batch = 2048; Ctk = 'q8_0'; Ctv = 'q8_0'; Spec = 'none'; Budget = 4096
+    deep     = @{ Model = '27b'; Ctx = 16384; Ub = 512;  Batch = 2048; Ctk = 'q8_0'; Ctv = 'q8_0'; Spec = 'none'; Budget = 4096; WebThink = $false
                   ThinkThreshold = 3; RagK = 3; RagTokens = 1200 }
 }
 $p = $profiles[$Profile]
@@ -67,15 +67,18 @@ foreach ($f in @($modelPath, "$BuildDir\llama-server.exe") + @($Draft | Where-Ob
 foreach ($f in @($modelPath) + @($Draft | Where-Object { $_ })) { $bad = Test-ModelFile $f; if ($bad) { throw $bad } }
 $build = [string]((& { $ErrorActionPreference = 'Continue'; & "$BuildDir\llama-server.exe" --version 2>&1 | ForEach-Object { "$_" } }) -match 'version:' | Select-Object -First 1) -replace '^.*version:\s*', ''
 
-# Server-level sampling is the Qwen non-thinking set; clients send the thinking set per request.
-if ($Reasoning -eq 'on') { $sampling = @('--temp', '1.0', '--top-p', '0.95', '--top-k', '20', '--min-p', '0') }
+# WebThink = what clients that don't choose (web UI, plain OpenAI clients) get; lib.ps1 sends enable_thinking on every
+# request, and any client can override it with chat_template_kwargs. Server sampling follows that default.
+$webThink = if ($Reasoning -eq 'on') { $true } elseif ($Reasoning -eq 'off') { $false } else { [bool]$p.WebThink }
+$env:LLAMA_ARG_CHAT_TEMPLATE_KWARGS = '{"enable_thinking":' + $webThink.ToString().ToLower() + '}'
+if ($webThink) { $sampling = @('--temp', '1.0', '--top-p', '0.95', '--top-k', '20', '--min-p', '0') }
 else                     { $sampling = @('--temp', '0.7', '--top-p', '0.8', '--top-k', '20', '--min-p', '0') }
 
 $cliArgs = @('-m', $modelPath, '-a', $m.Alias,
           '--host', '127.0.0.1', '--port', $Port,
           '-c', $Ctx, '-np', 1, '-t', $Threads, '-ngl', $Ngl, '-fa', 'auto', '--jinja',
           '-b', $Batch, '-ub', $Ub, '-ctk', $Ctk, '-ctv', $Ctv, '-ctxcp', 8,
-          '--reasoning', $Reasoning, '--reasoning-budget', $ReasoningBudget,
+          '--reasoning', $Reasoning, '--reasoning-budget', $ReasoningBudget, '--no-reasoning-preserve',
           '--reasoning-budget-message', '"Thinking budget reached; give the final answer now."',
           '--cors-origins', 'localhost', '--no-cors-credentials', '-cram', 1024, '-lv', 4) + $sampling
 if ($Spec -ne 'none') { $cliArgs += @('--spec-type', $Spec) }
@@ -85,12 +88,12 @@ $log = "$root\logs\server-$Profile-$Model.log"
 $proc = Start-Process -FilePath "$BuildDir\llama-server.exe" -ArgumentList $cliArgs -WindowStyle Hidden -PassThru `
     -RedirectStandardError $log -RedirectStandardOutput "$root\logs\server-$Profile-$Model.out.log"
 $proc.Id | Set-Content $pidFile
-@{ Profile = $Profile; Model = $Model; Alias = $m.Alias; Port = $Port; Reasoning = $Reasoning; Budget = $ReasoningBudget
+@{ Profile = $Profile; Model = $Model; Alias = $m.Alias; Port = $Port; Reasoning = $Reasoning; Budget = $ReasoningBudget; WebThink = $webThink
    Ctx = $Ctx; Ub = $Ub; Ctk = $Ctk; Ctv = $Ctv; Spec = $Spec; Draft = $Draft; Build = $BuildDir; LlamaBuild = $build.Trim()
    ThinkThreshold = $p.ThinkThreshold; RagK = $p.RagK; RagTokens = $p.RagTokens } |
     ConvertTo-Json | Set-Content "$root\logs\server.profile.json" -Encoding UTF8
-Write-Host ("Starting {0} [profile={1}, {2}, t={3}, ngl={4}, ctx={5}, ub={6}, kv={7}/{8}, spec={9}, reasoning={10}, budget={11}] PID {12}" -f `
-    $m.Alias, $Profile, $Backend, $Threads, $Ngl, $Ctx, $Ub, $Ctk, $Ctv, $Spec, $Reasoning, $ReasoningBudget, $proc.Id)
+Write-Host ("Starting {0} [profile={1}, {2}, t={3}, ngl={4}, ctx={5}, ub={6}, kv={7}/{8}, spec={9}, reasoning={10} (web/API default: {11}), budget={12}] PID {13}" -f `
+    $m.Alias, $Profile, $Backend, $Threads, $Ngl, $Ctx, $Ub, $Ctk, $Ctv, $Spec, $Reasoning, $(if ($webThink) { 'think' } else { 'no think' }), $ReasoningBudget, $proc.Id)
 Write-Host "Log: $log"
 
 for ($i = 0; $i -lt 600; $i++) {

@@ -1,0 +1,131 @@
+﻿{
+    "time":  "2026-09-19T19:55:35",
+    "tag":  "check",
+    "queries":  18,
+    "quality":  {
+                    "hit1":  1,
+                    "hit4":  1,
+                    "mrr":  1,
+                    "speed_recall":  1,
+                    "acc_recall":  1
+                },
+    "index":  {
+                  "chunks":  15,
+                  "max_chars":  1167,
+                  "avg_chars":  447
+              },
+    "timing_ms":  {
+                      "build":  204,
+                      "load":  53
+                  },
+    "items":  [
+                  {
+                      "id":  "port-busy",
+                      "rank":  1,
+                      "speed":  true,
+                      "accuracy":  true
+                  },
+                  {
+                      "id":  "alloc-fail",
+                      "rank":  1,
+                      "speed":  true,
+                      "accuracy":  true
+                  },
+                  {
+                      "id":  "device-lost",
+                      "rank":  1,
+                      "speed":  true,
+                      "accuracy":  true
+                  },
+                  {
+                      "id":  "hash-check",
+                      "rank":  1,
+                      "speed":  true,
+                      "accuracy":  true
+                  },
+                  {
+                      "id":  "slow-gen",
+                      "rank":  1,
+                      "speed":  true,
+                      "accuracy":  true
+                  },
+                  {
+                      "id":  "paging",
+                      "rank":  1,
+                      "speed":  true,
+                      "accuracy":  true
+                  },
+                  {
+                      "id":  "think-budget",
+                      "rank":  1,
+                      "speed":  true,
+                      "accuracy":  true
+                  },
+                  {
+                      "id":  "schema-think",
+                      "rank":  1,
+                      "speed":  true,
+                      "accuracy":  true
+                  },
+                  {
+                      "id":  "schema-cmd",
+                      "rank":  1,
+                      "speed":  true,
+                      "accuracy":  true
+                  },
+                  {
+                      "id":  "lan-expose",
+                      "rank":  1,
+                      "speed":  true,
+                      "accuracy":  true
+                  },
+                  {
+                      "id":  "log-rotate",
+                      "rank":  1,
+                      "speed":  true,
+                      "accuracy":  true
+                  },
+                  {
+                      "id":  "q5-rejected",
+                      "rank":  1,
+                      "speed":  true,
+                      "accuracy":  true
+                  },
+                  {
+                      "id":  "quant-size",
+                      "rank":  1,
+                      "speed":  true,
+                      "accuracy":  true
+                  },
+                  {
+                      "id":  "draft-removed",
+                      "rank":  1,
+                      "speed":  true,
+                      "accuracy":  true
+                  },
+                  {
+                      "id":  "deep-profile",
+                      "rank":  1,
+                      "speed":  true,
+                      "accuracy":  true
+                  },
+                  {
+                      "id":  "kv-sweep",
+                      "rank":  1,
+                      "speed":  true,
+                      "accuracy":  true
+                  },
+                  {
+                      "id":  "eval-compare",
+                      "rank":  1,
+                      "speed":  true,
+                      "accuracy":  true
+                  },
+                  {
+                      "id":  "web-ui",
+                      "rank":  1,
+                      "speed":  true,
+                      "accuracy":  true
+                  }
+              ]
+}

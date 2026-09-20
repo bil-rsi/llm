@@ -4,11 +4,11 @@ Scripts are run with `powershell -ExecutionPolicy Bypass -File C:\llm\scripts\<s
 
 ## Server profiles (`start.ps1 -Profile <name>`)
 
-| Profile | Model | Ctx | KV | Reasoning (router threshold / budget) | RAG (K / tokens) | Use for |
-|---|---|---|---|---|---|---|
-| `speed` (default) | 35B-A3B | 16K | f16 | auto (>= 4 / 512) | 2 / 800 | Interactive chat, lookups, extraction |
-| `accuracy` | 35B-A3B | 32K | f16 | auto (>= 3 / 3072) | 4 / 2000 | Hard questions, math, planning |
-| `deep` | 27B dense | 16K | q8_0 | auto (>= 3 / 4096) | 3 / 1200 | Offline batch jobs only (about 0.8 tok/s) |
+| Profile | Model | Ctx | KV | Scripts: think router (threshold / budget) | Web UI / API thinking default | RAG (K / tokens) | Use for |
+|---|---|---|---|---|---|---|---|
+| `speed` (default) | 35B-A3B | 16K | f16 | auto (>= 4 / 512) | off | 2 / 800 | Interactive chat, lookups, extraction |
+| `accuracy` | 35B-A3B | 32K | f16 | auto (>= 3 / 3072) | on | 4 / 2000 | Hard questions, math, planning |
+| `deep` | 27B dense | 16K | q8_0 | auto (>= 3 / 4096) | off | 3 / 1200 | Offline batch jobs only (about 0.8 tok/s) |
 
 Options override the profile: `-Model 27b|35b`, `-Think` (always reason), `-Ctx`, `-Ub`, `-Batch`, `-Ctk/-Ctv`,
 `-Spec ngram-mod|ngram-cache|draft-simple`, `-Draft <gguf> -DraftMax N`, `-ReasoningBudget N`, `-BuildDir <dir>`, `-Backend cpu`, `-Port`.
@@ -27,7 +27,7 @@ differs from `models\expected-sha256.txt` (a truncated download).
 | Record a correction | `correct.ps1 "question" "correct answer" [-Wrong "what it said"] [-NoEval]` — appends to `rag\docs\corrections.md` (an ordinary indexed doc, re-indexed immediately) and adds a regression check to `eval\evalset.jsonl`. In `chat.ps1`, `/correct <right answer>` does the same for the last question/answer |
 | Retrieval eval (no server) | `rag-eval.ps1 [-Baseline tests\fixtures\rag\baseline.json]` (fixture corpus in `tests\fixtures\rag`, results in `logs\rag-eval\`) |
 | Checks before a change is done | `check.ps1 -Stage fast\|task\|full` (rules in `CONSTRAINTS.md`; unit tests in `tests\`, run with `Invoke-Pester C:\llm\tests`) |
-| Resource usage | `status.ps1` |
+| Resource usage (server RAM, CPU, iGPU utilisation and iGPU shared memory) | `status.ps1` |
 | Benchmark sweep | `bench.ps1 -Model 35b -Ub 256,512,1024,2048 -Pp 512,2048 -Tg 32 -Tag ub` (results in `logs\bench\`, headed by llama.cpp build, GPU driver and args) |
 | CPU vs Vulkan / env A/B | `bench.ps1 -Model 27b -Backend cpu,vulkan -Pp 512 -Tg 128 -Tag backend`; `bench.ps1 -Env 'NAME=VALUE' -Tag x` |
 | Speed of a server config (spec, draft, ub) | `eval.ps1 -Set C:\llm\eval\speedset.jsonl -Reps 2 -Tag <config>` (`med_tps`, `draft_acc` per category) |
@@ -38,6 +38,9 @@ differs from `models\expected-sha256.txt` (a truncated download).
 | Check think router | `eval.ps1 -RouterOnly` (uses the running profile's threshold) |
 
 - **Web UI:** http://127.0.0.1:8080
-- **OpenAI-compatible API:** http://127.0.0.1:8080/v1 (model ids `qwen3.6-27b` / `qwen3.6-35b-a3b`, no API key). Per request: `chat_template_kwargs: {"enable_thinking": true}`, `response_format: {"type": "json_schema", ...}`.
+  - Thinking follows the profile: off for `speed` and `deep`, on for `accuracy` (`-Think` forces it on). To switch it for your browser only: Settings → Developer → Custom JSON `{"chat_template_kwargs":{"enable_thinking":true}}`.
+  - Once per browser: Settings → Tools → untick **Browser**. Its two tools (`get_datetime`, `get_info`) add ~330 prompt tokens, which makes the first message of every chat ~10 s instead of ~3 s.
+  - The first reply in a chat always waits ~3 s even for a short question (the MoE reads most experts for any small batch); follow-ups reuse the cached history.
+- **OpenAI-compatible API:** http://127.0.0.1:8080/v1 (model ids `qwen3.6-27b` / `qwen3.6-35b-a3b`, no API key). Clients that don't say otherwise get the profile's thinking default; per request: `chat_template_kwargs: {"enable_thinking": true|false}`, `response_format: {"type": "json_schema", ...}`, `stream: true`. Past reasoning is not fed back into the context (`--no-reasoning-preserve`).
 - **Logs:** `C:\llm\logs\server-<profile>-<model>.log`. Baseline benchmarks: `C:\llm\logs\bench-*.txt`.
 - **Eval set:** `C:\llm\eval\evalset.jsonl` (starter set of 21 items; add your own). Schemas: `C:\llm\schemas\`, grammars: `C:\llm\grammars\`.
