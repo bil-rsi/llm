@@ -2,12 +2,17 @@
 # Usage:
 #   eval.ps1 [-Think auto|on|off] [-Reps 2] [-Category math] [-Limit 5] [-Tag note]   -> logs\eval\<stamp>-<profile>-<tag>.json
 #   eval.ps1 -RouterOnly                     check think-router decisions against should_think (no generation)
-#   eval.ps1 -Compare a.json b.json          per-category accuracy and median-latency diff
+#   eval.ps1 -Compare a.json b.json          per-category accuracy and median-latency diff (also -Compare a.json, b.json in-process)
 # Item format (eval\evalset.jsonl): {id, category, prompt, check, expected, schema?, rag?, should_think?}
 #   check: number | choice | keywords | unknown | json | regex
+# Parameters are named-only: under powershell -File, b.json in "-Compare a.json b.json" is a separate argument, collected by $CompareRest.
+[CmdletBinding(PositionalBinding = $false)]
 param([ValidateSet('auto', 'on', 'off')][string]$Think = 'auto', [int]$Reps = 1, [string]$Category = '', [int]$Limit = 0,
       [string]$Tag = '', [int]$Seed = 42, [string]$Set = 'C:\llm\eval\evalset.jsonl',
-      [switch]$RouterOnly, [string[]]$Compare = @())
+      [switch]$RouterOnly, [string[]]$Compare = @(), [Parameter(ValueFromRemainingArguments = $true)][string[]]$CompareRest = @())
+if ($CompareRest.Count -and -not $Compare.Count) { Write-Host "Unexpected arguments: $($CompareRest -join ' '). All parameters are named."; exit 1 }
+$Compare = @($Compare) + @($CompareRest)
+if ($Compare.Count -and $Compare.Count -ne 2) { Write-Host "-Compare takes exactly two result files, got $($Compare.Count): $($Compare -join ' ')"; exit 1 }
 . "$PSScriptRoot\lib.ps1"
 
 function Get-Median([double[]]$v) { if (-not $v.Count) { return 0 }; $s = $v | Sort-Object; $n = $s.Count; if ($n % 2) { $s[[int][math]::Floor($n / 2)] } else { ($s[$n / 2 - 1] + $s[$n / 2]) / 2 } }

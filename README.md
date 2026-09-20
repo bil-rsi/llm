@@ -27,7 +27,7 @@ Ub/Spec values are provisional until confirmed by the bench sweeps.
 | Benchmark sweep | `bench.ps1 -Model 35b -Ub 256,512,1024,2048 -Pp 512,2048 -Tg 32 -Tag ub` (results in `logs\bench\`) |
 | KV cache sweep | `bench.ps1 -Model 27b -Ctk f16,q8_0,q4_0 -Ctv f16,q8_0,q4_0 -Depth 0,8192 -Tg 32 -Reps 2 -Tag kv` |
 | Accuracy eval | `eval.ps1 [-Think auto\|on\|off] [-Reps 2] [-Category math] [-Tag note]` (results in `logs\eval\`) |
-| Compare two evals | `eval.ps1 -Compare logs\eval\a.json logs\eval\b.json` |
+| Compare two evals | `eval.ps1 -Compare logs\eval\a.json logs\eval\b.json` (works with `powershell -File` and in-process; in-process `-Compare a.json, b.json` also works) |
 | Check think router | `eval.ps1 -RouterOnly` (uses the running profile's threshold) |
 
 - **Web UI:** http://127.0.0.1:8080
